@@ -1128,9 +1128,11 @@
         </table>
 
         <div style="text-align:center; margin: 14px 0;">
-          <button type="button" id="calcBtn">Calculate Results</button>
-          <button type="button" class="btn-save" id="saveBtn" style="display:none;">Save Test</button>
-          <button type="button" class="btn-print" id="printCurrentBtn" style="display:none;">Print Current</button>
+          <button type="button" id="calcBtn" onclick="calculateResults()">Calculate Results</button>
+          <button type="button" class="btn-save" id="saveBtn" style="display:none;" onclick="saveTest()">Save
+            Test</button>
+          <button type="button" class="btn-print" id="printCurrentBtn" style="display:none;"
+            onclick="printResult()">Print Current</button>
         </div>
 
         <!-- Metrics for Count/Strength -->
@@ -2432,15 +2434,19 @@
         const customName = document.getElementById('t_custom_name')?.value?.trim();
         const customTarget = parseFloat(document.getElementById('t_custom')?.value);
         if (customName && isFinite(customTarget) && customTarget > 0) {
-          const customRange = parseFloat(document.getElementById('r_custom')?.value || '5.0');
-          ranges[customName] = (isFinite(customRange) && customRange >= 0.5 && customRange <= 20) ? customRange : 5.0;
+          // Legacy support or ignore
         }
         return ranges;
       }
 
-      function getAcceptableRange(productName) {
-        const ranges = getAcceptableRanges();
-        return ranges[productName] || 5.0;
+      function getAcceptableRange(productNameIgnored) {
+        // Always return the global setting from txtRange as requested
+        const el = document.getElementById('txtRange');
+        if (el && el.value) {
+          const v = parseFloat(el.value);
+          if (isFinite(v) && v > 0) return v;
+        }
+        return 2.5;
       }
 
       function formatTargets(targets) {
