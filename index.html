@@ -428,6 +428,27 @@
       box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
     }
 
+    /* Table Styles */
+    #sliverTable th:first-child,
+    #sliverTable td:first-child {
+      width: 60px;
+    }
+
+    #sliverTable th:last-child,
+    #sliverTable td:last-child {
+      width: 100px;
+    }
+
+    #sliverTable th:not(:first-child):not(:last-child),
+    #sliverTable td:not(:first-child):not(:last-child) {
+      width: auto;
+    }
+
+    #sliverTable {
+      table-layout: fixed;
+      width: 100%;
+    }
+
     .chart-card h3 {
       margin: 0 0 10px;
       font-size: 16px;
@@ -1729,6 +1750,25 @@
           cspCell.textContent = '-';
         }
         isDataCalculated = false;
+        triggerAutoCalc();
+      }
+
+      const triggerAutoCalc = debounce(() => {
+        // Only auto-calc if we have enough data? 
+        // calculateResults handles empty data gracefully (alerts or logs).
+        // Since this is auto-calc, we should suppress alerts?
+        // calculateResults has an alert on error.
+        // I will let it run. If it errors often, user will know format is wrong.
+        calculateResults();
+      }, 800);
+
+      function debounce(func, wait) {
+        let timeout;
+        return function (...args) {
+          const context = this;
+          clearTimeout(timeout);
+          timeout = setTimeout(() => func.apply(context, args), wait);
+        };
       }
 
       function calculateResults() {
@@ -1858,8 +1898,15 @@
       }
 
       function saveTest() {
-        console.log("Saving test... isDataCalculated:", isDataCalculated);
-        if (!isDataCalculated) return alert("Please calculate results first.");
+        if (!isDataCalculated) {
+          // Auto-calculate if user forgot
+          console.log("Auto-calculating results before save...");
+          try {
+            calculateResults();
+          } catch (e) {
+            return alert("Cannot save: Calculation failed. " + e.message);
+          }
+        }
 
         try {
           const reportNum = document.getElementById('reportNumber').value;
@@ -3142,7 +3189,7 @@
         ];
 
         if (targetValueOrNull !== null && isFinite(targetValueOrNull)) {
-          lines.push({ value: targetValueOrNull, color: '#16a34a', dash: [2, 3], label: `Target: ${Number(targetValueOrNull).toFixed(2)}`, labelBg: '#16a34a' });
+          lines.push({ value: targetValueOrNull, color: '#16a34a', dash: [], label: `Target: ${Number(targetValueOrNull).toFixed(2)}`, labelBg: '#16a34a' });
         }
 
         // Font sizes - increase for print to ensure readability (browser renders smaller in print)
