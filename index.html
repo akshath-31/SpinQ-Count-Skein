@@ -1726,48 +1726,164 @@
       }
 
       function calculateResults() {
-        const rows = document.querySelectorAll('#testTableBody tr');
-        let countSum = 0, strengthSum = 0, cspSum = 0;
-        let n = 0;
-        let counts = [], strengths = [], csps = [];
+        try {
+          const rows = document.querySelectorAll('#testTableBody tr');
+          let countSum = 0, strengthSum = 0, cspSum = 0;
+          let n = 0;
+          let counts = [], strengths = [], csps = [];
 
-        rows.forEach(row => {
-          // Get count from text content (calculated)
-          const cText = row.querySelector('.count-val').textContent;
-          const c = (cText !== '-') ? parseFloat(cText) : null;
+          rows.forEach(row => {
+            // Get count from text content (calculated)
+            const cText = row.querySelector('.count-val').textContent;
+            const c = (cText !== '-' && cText !== '') ? parseFloat(cText) : null;
 
-          const s = parseFloat(row.querySelector('.strength-val').value);
+            const sVal = row.querySelector('.strength-val').value;
+            const s = (sVal !== '') ? parseFloat(sVal) : null;
 
-          const cspText = row.querySelector('.csp-val').textContent;
-          const csp = (cspText !== '-') ? parseFloat(cspText) : null;
+            const cspText = row.querySelector('.csp-val').textContent;
+            const csp = (cspText !== '-' && cspText !== '') ? parseFloat(cspText) : null;
 
-          if (c !== null && isFinite(s) && csp !== null) {
-            countSum += c; counts.push(c);
-            strengthSum += s; strengths.push(s);
-            cspSum += csp; csps.push(csp);
-            n++;
+            if (c !== null && s !== null && isFinite(s) && csp !== null) {
+              countSum += c; counts.push(c);
+              strengthSum += s; strengths.push(s);
+              cspSum += csp; csps.push(csp);
+              n++;
+            }
+          });
+
+          if (n === 0) return alert("No valid manual data entered.");
+
+          const avgCount = (countSum / n).toFixed(2);
+          const avgStrength = (strengthSum / n).toFixed(2);
+          const avgCSP = (cspSum / n).toFixed(0);
+
+          // Calculate CV% for Count
+          let countCV = "0.00";
+          if (n > 1) {
+            const mean = parseFloat(avgCount);
+            const variance = counts.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / (n - 1);
+            const stdDev = Math.sqrt(variance);
+            if (mean > 0) {
+              countCV = ((stdDev / mean) * 100).toFixed(2);
+            }
           }
-        });
 
-        if (n === 0) return alert("No valid manual data entered.");
-
-        const avgCount = (countSum / n).toFixed(2);
-        const avgStrength = (strengthSum / n).toFixed(2);
-        const avgCSP = (cspSum / n).toFixed(0);
-
-        // Update metrics display
-        const metricsDiv = document.getElementById('metrics');
-        metricsDiv.innerHTML = `
+          // Update metrics display
+          const metricsDiv = document.getElementById('metrics');
+          metricsDiv.innerHTML = `
              <div class="metric"><div class="label">Avg Count</div><div class="value">${avgCount}</div></div>
              <div class="metric"><div class="label">Avg Strength</div><div class="value">${avgStrength}</div></div>
              <div class="metric"><div class="label">Avg CSP</div><div class="value">${avgCSP}</div></div>
-             <div class="metric"><div class="label">Samples</div><div class="value">${n}</div></div>
+             <div class="metric"><div class="label">Count CV%</div><div class="value">${countCV}%</div></div>
           `;
-        metricsDiv.style.display = 'flex';
+          metricsDiv.style.display = 'flex';
 
-        isDataCalculated = true;
-        document.getElementById('saveBtn').disabled = false;
+          isDataCalculated = true;
+          document.getElementById('saveBtn').disabled = false;
+
+          // -----------------------------
+          // Render Charts
+          // -----------------------------
+          destroyChartMap(chartInstances, 'chartsGrid');
+          const chartsContainer = document.getElementById('chartsGrid');
+          chartsContainer.style.display = 'grid'; // Ensure it's visible
+
+          // 1. Count Chart
+          const countChartId = 'chart_count_dist';
+          chartsContainer.appendChild(makeChartCard('Count Distribution (Ne)', countChartId));
+          const countMean = parseFloat(avgCount);
+          // Use Target if available, else Mean. 5% limits.
+          const selCount = parseFloat(document.getElementById('selCount').value);
+          const countTarget = (isFinite(selCount) && selCount > 0) ? selCount : null;
+          // If target is available, use it for limits logic or just use mean? 
+          // Previous logic used Mean +/- Range% for bell curve center usually, but let's stick to Mean for curve center.
+          // Limits visual can use target.
+
+          // Calculating 5% limits based on Target (typ) or Mean
+          const countLims = (countTarget) ? limitsFromTarget(countTarget, 5.0) : limitsFromMean(countMean, 5.0);
+          plotDistribution(countChartId, counts, countMean, countLims.lcl, countLims.ucl, 'Count Distribution', chartInstances, countTarget);
+
+          // 2. Strength Chart
+          const strengthChartId = 'chart_strength_dist';
+          chartsContainer.appendChild(makeChartCard('Strength Distribution (lbs)', strengthChartId));
+          const strengthMean = parseFloat(avgStrength);
+          // No explicit target for strength in inputs, so use Mean +/- 10% (wider range for strength usually)
+          const strengthLims = limitsFromMean(strengthMean, 10.0);
+          plotDistribution(strengthChartId, strengths, strengthMean, strengthLims.lcl, strengthLims.ucl, 'Strength Distribution', chartInstances, null);
+
+        } catch (e) {
+          console.error(e);
+          alert("Error calculating results: " + e.message);
+        }
       }
+
+      function saveTest() {
+        if (!isDataCalculated) return alert("Please calculate results first.");
+
+        try {
+          const reportNum = document.getElementById('reportNumber').value;
+          const operator = document.getElementById('operatorName').value;
+          const machine = document.getElementById('selMachine').value;
+          const product = document.getElementById('selProduct').value;
+          const count = document.getElementById('selCount').value; // Target count
+
+          const rowsData = [];
+          const rows = document.querySelectorAll('#testTableBody tr');
+          rows.forEach(row => {
+            rowsData.push({
+              sample: row.cells[0].textContent,
+              pos: row.querySelector('.pos-val').value,
+              weight: row.querySelector('.weight-val').value,
+              count: row.querySelector('.count-val').textContent,
+              strength: row.querySelector('.strength-val').value,
+              csp: row.querySelector('.csp-val').textContent
+            });
+          });
+
+          // Parse metrics from the DOM (quick way)
+          const mVals = document.querySelectorAll('#metrics .value');
+          if (mVals.length < 4) throw new Error("Metrics not found");
+          const metrics = {
+            avgCount: mVals[0].textContent,
+            avgStrength: mVals[1].textContent,
+            avgCSP: mVals[2].textContent,
+            countCV: mVals[3].textContent
+          };
+
+          const testRecord = {
+            id: Date.now().toString(),
+            reportNumber: reportNum,
+            testDate: document.getElementById('testDate').value,
+            dateTime: new Date().toLocaleString(),
+            operatorName: operator,
+            machine,
+            product,
+            targetCount: count,
+            rows: rowsData,
+            metrics: metrics
+          };
+
+          // Save to new storage key
+          const saved = JSON.parse(localStorage.getItem('spinQ_countStrengthTests') || '[]');
+          saved.push(testRecord);
+          localStorage.setItem('spinQ_countStrengthTests', JSON.stringify(saved));
+
+          // Increment report counter
+          let reportCounter = getReportCounter();
+          reportCounter++;
+          setReportCounter(reportCounter);
+          document.getElementById('reportNumber').value = reportCounter;
+
+          isTestSaved = true;
+          document.getElementById('saveBtn').disabled = true;
+          alert("Test saved successfully!");
+
+        } catch (e) {
+          alert("Error saving test: " + e.message);
+        }
+      }
+
+
 
       function startNewTest() {
         if (confirm("Start a new test? Unsaved data will be lost.")) {
