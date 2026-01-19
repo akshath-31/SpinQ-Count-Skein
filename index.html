@@ -998,7 +998,7 @@
           style="min-width: 180px; text-align: right; display: flex; align-items: center; justify-content: flex-end; gap: 10px;">
           <div class="current-date" id="currentDate" style="min-width: auto;"></div>
           <button class="btn-muted" onclick="openConfig()"
-            style="margin: 0; padding: 6px 12px; font-size: 13px;">Config</button>
+            style="padding: 6px 12px; font-size: 13px;">Configuration</button>
           <button class="btn-danger" onclick="logout()"
             style="margin: 0; padding: 6px 12px; font-size: 13px;">Logout</button>
         </div>
@@ -1070,8 +1070,9 @@
             <input type="number" id="txtSubSamples" class="card-input" value="1" min="1" step="1">
           </div>
           <div class="input-card">
-            <label class="form-label">Acceptable Range (+/- %)</label>
-            <input type="number" id="txtRange" class="card-input" value="2.5" min="0.5" max="10" step="0.1">
+            <label class="form-label">Count Range Acceptable (+/- %)</label>
+            <input type="number" id="txtRange" class="card-input" value="2.5" min="0.5" max="10.0" step="0.1"
+              onchange="if(this.value < 0.5) this.value=0.5; if(this.value > 10) this.value=10;">
           </div>
         </div>
       </div>
@@ -1488,6 +1489,7 @@
 
         if (isLoggedIn) {
           if (mainAppView) mainAppView.style.display = 'block';
+          populateMainDropdowns();
         } else {
           if (!hasUsers) {
             toggleSignup();
@@ -1856,36 +1858,43 @@
       }
 
       function saveTest() {
+        console.log("Saving test... isDataCalculated:", isDataCalculated);
         if (!isDataCalculated) return alert("Please calculate results first.");
 
         try {
           const reportNum = document.getElementById('reportNumber').value;
-          const operator = document.getElementById('operatorName').value;
-          const machine = document.getElementById('selMachine').value;
-          const product = document.getElementById('selProduct').value;
-          const count = document.getElementById('selCount').value; // Target count
+          const operator = document.getElementById('operatorName').value || "Unknown";
+          const machine = document.getElementById('selMachine').value || "Unknown";
+          const product = document.getElementById('selProduct').value || "Unknown";
+          const count = document.getElementById('selCount').value || "Unknown";
+
+          if (!reportNum) throw new Error("Report number missing");
 
           const rowsData = [];
           const rows = document.querySelectorAll('#testTableBody tr');
-          rows.forEach(row => {
+          rows.forEach((row, i) => {
+            // Basic extraction with fallback
             rowsData.push({
               sample: row.cells[0].textContent,
-              pos: row.querySelector('.pos-val').value,
-              weight: row.querySelector('.weight-val').value,
-              count: row.querySelector('.count-val').textContent,
-              strength: row.querySelector('.strength-val').value,
-              csp: row.querySelector('.csp-val').textContent
+              pos: row.querySelector('.pos-val')?.value || '',
+              weight: row.querySelector('.weight-val')?.value || '',
+              count: row.querySelector('.count-val')?.textContent || '-',
+              strength: row.querySelector('.strength-val')?.value || '',
+              csp: row.querySelector('.csp-val')?.textContent || '-'
             });
           });
 
-          // Parse metrics from the DOM (quick way)
-          const mVals = document.querySelectorAll('#metrics .value');
-          if (mVals.length < 4) throw new Error("Metrics not found");
+          // Metrics
+          const metricsDiv = document.getElementById('metrics');
+          const mValues = metricsDiv.querySelectorAll('.value');
+          if (mValues.length < 4) {
+            console.warn("Metrics elements missing:", mValues.length);
+          }
           const metrics = {
-            avgCount: mVals[0].textContent,
-            avgStrength: mVals[1].textContent,
-            avgCSP: mVals[2].textContent,
-            countCV: mVals[3].textContent
+            avgCount: mValues[0]?.textContent || '-',
+            avgStrength: mValues[1]?.textContent || '-',
+            avgCSP: mValues[2]?.textContent || '-',
+            countCV: mValues[3]?.textContent || '-'
           };
 
           const testRecord = {
@@ -1901,12 +1910,25 @@
             metrics: metrics
           };
 
-          // Save to new storage key
+          console.log("Test Record:", testRecord);
+
+          // Save
           const saved = JSON.parse(localStorage.getItem('spinQ_countStrengthTests') || '[]');
           saved.push(testRecord);
           localStorage.setItem('spinQ_countStrengthTests', JSON.stringify(saved));
+          console.log("Saved to LocalStorage.");
 
-          // Increment report counter
+          // Refresh List if function exists
+          if (typeof renderSavedTests === 'function') {
+            renderSavedTests();
+          } else {
+            console.warn("renderSavedTests function not found, reloading page to show saved test recommended.");
+            // Try to find if there is another refresh function
+            // or just reload? No, user loses state.
+            // I will implement renderSavedTests if missing.
+          }
+
+          // Counter
           let reportCounter = getReportCounter();
           reportCounter++;
           setReportCounter(reportCounter);
@@ -1917,8 +1939,56 @@
           alert("Test saved successfully!");
 
         } catch (e) {
+          console.error("Save Test Error:", e);
           alert("Error saving test: " + e.message);
         }
+      }
+
+      // -----------------------------
+      // Render Saved Tests
+      // -----------------------------
+      function getSavedTests() {
+        try {
+          return JSON.parse(localStorage.getItem('spinQ_countStrengthTests') || '[]');
+        } catch (e) {
+          console.error("Error reading saved tests:", e);
+          return [];
+        }
+      }
+
+      function renderSavedTests() {
+        const tests = getSavedTests();
+        const tbody = document.getElementById('savedList');
+        if (!tbody) return;
+
+        tbody.innerHTML = '';
+        if (tests.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="8">No saved tests found.</td></tr>';
+          return;
+        }
+
+        // Sort by id descending (newest first)
+        tests.slice().reverse().forEach((test, revIndex) => {
+          const targetsText = test.targetCount ? `Count: ${test.targetCount}` : '-';
+          const productSummary = test.product + (test.metrics ? ` (Avg Count: ${test.metrics.avgCount})` : '');
+
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td><input type="checkbox" value="${test.id || ''}"></td>
+            <td>${test.dateTime || '-'}</td>
+            <td>${test.reportNumber || '-'}</td>
+            <td>${test.testDate || '-'}</td>
+            <td>${test.operatorName || '-'}</td>
+            <td>${targetsText}</td>
+            <td>${productSummary}</td>
+            <td><button class="btn-muted" style="margin:0; padding:4px 8px;" onclick="viewTestDetails('${test.id}')">View</button></td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+
+      function viewTestDetails(id) {
+        alert("View Details feature: ID " + id);
       }
 
 
