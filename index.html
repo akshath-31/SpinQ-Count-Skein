@@ -1127,10 +1127,8 @@
 
       <div style="text-align:center; margin: 14px 0;">
         <button type="button" id="calcBtn" onclick="calculateResults()">Calculate Results</button>
-        <button type="button" class="btn-save" id="saveBtn" style="display:none;" onclick="saveTest()">Save
-          Test</button>
-        <button type="button" class="btn-print" id="printCurrentBtn" style="display:none;" onclick="printResult()">Print
-          Current</button>
+        <button type="button" class="btn-save" id="saveBtn" disabled onclick="saveTest()">Save Test</button>
+        <button type="button" class="btn-print" id="printCurrentBtn" onclick="handlePrintClick()">Print Current</button>
       </div>
 
       <!-- Metrics for Count/Strength -->
@@ -1773,7 +1771,23 @@
         cspCell.textContent = '-';
       }
       isDataCalculated = false;
+      isDataModified = true; // Mark data as modified when user edits
+
+      // Enable Save button when data is modified (needs recalculation + save)
+      const saveBtn = document.getElementById('saveBtn');
+      if (saveBtn && isDataCalculated) saveBtn.disabled = false;
+
       triggerAutoCalc();
+    }
+
+    // Handle Print button click with auto-calculate
+    function handlePrintClick() {
+      if (isDataModified || !isDataCalculated) {
+        console.log("Auto-calculating before print since data changed...");
+        calculateResults();
+      }
+      // Proceed with print
+      printResult();
     }
 
     const triggerAutoCalc = debounce(() => {
@@ -1965,13 +1979,32 @@
       }
 
       try {
-        const reportNum = document.getElementById('reportNumber').value;
+        let reportNum = document.getElementById('reportNumber').value;
         const operator = document.getElementById('operatorName')?.value || "Unknown";
         const machine = document.getElementById('selMachine')?.value || "Unknown";
         const product = document.getElementById('selProduct')?.value || "Unknown";
         const count = document.getElementById('selCount')?.value || "Unknown";
 
         if (!reportNum) throw new Error("Report number missing");
+
+        // VERSION TRACKING LOGIC
+        if (isTestSaved && isDataModified) {
+          // This is a modification of a saved test - add/increment version suffix
+          if (versionSuffix === 0) {
+            // First modification - store base number and create -1
+            baseReportNumber = reportNum;
+            versionSuffix = 1;
+          } else {
+            // Subsequent modification - increment version
+            versionSuffix++;
+          }
+          reportNum = `${baseReportNumber}-${versionSuffix}`;
+          console.log(`Version tracking: ${baseReportNumber} → ${reportNum}`);
+        } else if (!isTestSaved) {
+          // Brand new test - reset versioning
+          baseReportNumber = reportNum;
+          versionSuffix = 0;
+        }
 
         const rowsData = [];
         const rows = document.querySelectorAll('#testTableBody tr');
@@ -2007,7 +2040,7 @@
 
         const testRecord = {
           id: Date.now().toString(),
-          reportNumber: reportNum,
+          reportNumber: reportNum, // Use versioned reportNum
           testDate: document.getElementById('testDate')?.value || new Date().toISOString().split('T')[0],
           dateTime: new Date().toLocaleString(),
           operatorName: operator,
@@ -2028,20 +2061,29 @@
           renderSavedTests();
         }
 
-        // Counter Update Logic (Self-contained)
-        let currentReport = parseInt(localStorage.getItem('spinQ_reportCounter') || '1000');
-        if (isFinite(currentReport)) {
-          currentReport++;
-          localStorage.setItem('spinQ_reportCounter', currentReport);
-          document.getElementById('reportNumber').value = currentReport;
-          if (typeof setReportCounter === 'function') setReportCounter(currentReport); // Sync state if possible
+        // Counter Update Logic (only for brand new tests, not versions)
+        if (versionSuffix === 0) {
+          let currentReport = parseInt(localStorage.getItem('spinQ_reportCounter') || '1000');
+          if (isFinite(currentReport)) {
+            currentReport++;
+            localStorage.setItem('spinQ_reportCounter', currentReport);
+            document.getElementById('reportNumber').value = currentReport;
+            if (typeof setReportCounter === 'function') setReportCounter(currentReport); // Sync state if possible
+          }
+        } else {
+          // Update display to show versioned number
+          document.getElementById('reportNumber').value = reportNum;
         }
 
+        // Update state flags
         isTestSaved = true;
+        isDataModified = false; // Reset since we just saved
+
+        // Disable save button until next modification
         const saveBtn = document.getElementById('saveBtn');
         if (saveBtn) saveBtn.disabled = true;
 
-        alert("Success! Test saved.");
+        alert(`Success! Test saved as ${reportNum}.`);
 
       } catch (e) {
         console.error("Save Test Error:", e);
@@ -2103,6 +2145,12 @@
 
     function startNewTest() {
       if (confirm("Start a new test? Unsaved data will be lost.")) {
+        // Reset version tracking for new test
+        isTestSaved = false;
+        isDataModified = false;
+        baseReportNumber = null;
+        versionSuffix = 0;
+
         document.getElementById('testSection').style.display = 'none';
         document.getElementById('testTableBody').innerHTML = '';
         document.getElementById('metrics').style.display = 'none';
@@ -2162,6 +2210,9 @@
     let hasUnsavedData = false;
     let isDataCalculated = false; // Track if data has been calculated (needs recalculation if changed)
     let isTestSaved = false; // Track if current test has been saved
+    let isDataModified = false; // Track if data changed after last save/calculate
+    let baseReportNumber = null; // Store base report number for versioning (e.g., "1018")
+    let versionSuffix = 0; // Track version number (0 = no suffix, 1 = -1, 2 = -2, etc.)
 
     const chartInstances = new Map();
     const detailsChartInstances = new Map();
@@ -2630,13 +2681,13 @@
     }
 
 
-    function startNewTest() {
+    function startNewSliverTest() {  // Renamed from startNewTest - for Sliver/Carding module
       // Check if there's any unsaved data
       const hasData = cardRows && cardRows.length > 0 &&
         cardRows.some(r => (r.coilers || []).some(v => v !== null && isFinite(v)));
 
       if (hasData || hasUnsavedData) {
-        const confirmMessage = 'Warning: All unsaved data will be lost.\n\nDo you want to start a new test?';
+        const confirmMessage = 'Warning: All unsaved data will be lost.\\n\\nDo you want to start a new test?';
         if (!confirm(confirmMessage)) {
           return; // User cancelled
         }
@@ -2689,9 +2740,9 @@
       isDataCalculated = false;
       isTestSaved = false;
 
-      // Reset buttons
-      document.getElementById('saveBtn').style.display = 'none';
-      document.getElementById('printCurrentBtn').style.display = 'none';
+      // Reset buttons - COMMENTED OUT FOR ALWAYS-VISIBLE REQUIREMENT
+      // document.getElementById('saveBtn').style.display = 'none';
+      // document.getElementById('printCurrentBtn').style.display = 'none';
 
       // Clear charts
       destroyChartMap(chartInstances, 'chartsGrid');
@@ -3590,56 +3641,12 @@
     }
 
     // -----------------------------
-    // Save / Load / Delete / Details
+    // Saved Tests Display / Load / Delete / Details
+    // (saveTest removed - using main version with versioning logic)
     // -----------------------------
-    function saveTest(e) {
-      if (e) e.preventDefault();
-      try {
-        if (!currentTest) { alert('Please calculate results before saving.'); return; }
 
-        // Check if there are out-of-control cards or coilers
-        if ((currentTest.oocCardsAll && currentTest.oocCardsAll > 0) || (currentTest.oocCoilersAll && currentTest.oocCoilersAll > 0)) {
-          const cardMsg = currentTest.oocCardsAll > 0 ? `${currentTest.oocCardsAll} card(s) out of range. ` : '';
-          const coilerMsg = currentTest.oocCoilersAll > 0 ? `${currentTest.oocCoilersAll} coiler reading(s) out of range.` : '';
-          const message = `${cardMsg}${coilerMsg}<br><br>Do you want to continue saving?`;
 
-          // Show Custom Modal
-          document.getElementById('saveConfirmMessage').innerHTML = message;
-          document.getElementById('saveConfirmModal').style.display = 'flex';
-          return; // Stop here, wait for modal
-        }
 
-        // If no warnings, save immediately
-        finalizeSave();
-
-      } catch (e) {
-        alert("Error initiating save: " + e.message);
-        console.error(e);
-      }
-    }
-
-    function finalizeSave() {
-      try {
-        const saved = getSavedTests();
-        saved.push(currentTest);
-        setSavedTests(saved);
-        alert('Test saved successfully.');
-        document.getElementById('saveBtn').style.display = 'none';
-
-        // Show Print Current button after saving (enabled since data is calculated)
-        document.getElementById('printCurrentBtn').style.display = 'inline-block';
-        enableSavePrintButtons();
-
-        // Mark data as saved
-        hasUnsavedData = false;
-        isTestSaved = true;
-
-        loadSavedTests();
-      } catch (e) {
-        alert("Error saving test: " + e.message);
-        console.error(e);
-      }
-    }
 
     function formatProductSummary(summaryByProduct) {
       const keys = Object.keys(summaryByProduct || {});
