@@ -1069,6 +1069,10 @@
             <label class="form-label">Tests per Sample</label>
             <input type="number" id="txtSubSamples" class="card-input" value="1" min="1" step="1">
           </div>
+          <div class="input-card">
+            <label class="form-label">Acceptable Range (+/- %)</label>
+            <input type="number" id="txtRange" class="card-input" value="2.5" min="0.5" max="10" step="0.1">
+          </div>
         </div>
       </div>
 
@@ -1686,7 +1690,7 @@
         tr.innerHTML = `
             <td>${idx}</td>
             <td><input type="text" class="card-input pos-val" placeholder="#"></td>
-            <td><input type="number" class="card-input weight-val" oninput="calcRow(this)" step="0.01"></td>
+            <td><input type="number" class="card-input weight-val scale-input" id="weight_${idx}" oninput="calcRow(this)" step="0.01"></td>
             <td class="count-val" style="font-weight:bold;">-</td>
             <td><input type="number" class="card-input strength-val" oninput="calcRow(this)" step="0.1"></td>
             <td class="csp-val" style="font-weight:bold;">-</td>
@@ -1788,20 +1792,54 @@
           const chartsContainer = document.getElementById('chartsGrid');
           chartsContainer.style.display = 'grid'; // Ensure it's visible
 
-          // 1. Count Chart
+          // 1. Count Chart (with User Defined Range)
+          const rangeInput = document.getElementById('txtRange');
+          const rangeVal = (rangeInput && rangeInput.value) ? parseFloat(rangeInput.value) : 2.5;
+
           const countChartId = 'chart_count_dist';
-          chartsContainer.appendChild(makeChartCard('Count Distribution (Ne)', countChartId));
+          chartsContainer.appendChild(makeChartCard(`Count Distribution (Ne) - Limits +/-${rangeVal}%`, countChartId));
           const countMean = parseFloat(avgCount);
-          // Use Target if available, else Mean. 5% limits.
           const selCount = parseFloat(document.getElementById('selCount').value);
           const countTarget = (isFinite(selCount) && selCount > 0) ? selCount : null;
-          // If target is available, use it for limits logic or just use mean? 
-          // Previous logic used Mean +/- Range% for bell curve center usually, but let's stick to Mean for curve center.
-          // Limits visual can use target.
 
-          // Calculating 5% limits based on Target (typ) or Mean
-          const countLims = (countTarget) ? limitsFromTarget(countTarget, 5.0) : limitsFromMean(countMean, 5.0);
-          plotDistribution(countChartId, counts, countMean, countLims.lcl, countLims.ucl, 'Count Distribution', chartInstances, countTarget);
+          // Calculate Limits based on Target (spec) or Mean (control)
+          // User requested "use this value [acceptable range] ... to claucluate the status and LCL and UCL"
+          // Implies Spec Limits relative to Target.
+          let lcl, ucl;
+          if (countTarget) {
+            lcl = countTarget * (1 - rangeVal / 100);
+            ucl = countTarget * (1 + rangeVal / 100);
+          } else {
+            // Fallback to Mean if no target (CONTROL limits logic)
+            lcl = countMean * (1 - rangeVal / 100);
+            ucl = countMean * (1 + rangeVal / 100);
+          }
+
+          // Update Status Column
+          const tableRows = document.querySelectorAll('#testTableBody tr');
+          tableRows.forEach(row => {
+            const countCell = row.querySelector('.count-val');
+            const statusCell = row.querySelector('.status-cell');
+            const cVal = parseFloat(countCell.textContent);
+
+            if (isFinite(cVal)) {
+              if (cVal < lcl || cVal > ucl) {
+                statusCell.textContent = 'OOC';
+                statusCell.style.color = '#ef4444';
+                statusCell.style.fontWeight = 'bold';
+                row.style.backgroundColor = '#fef2f2'; // Light red bg
+              } else {
+                statusCell.textContent = 'OK';
+                statusCell.style.color = '#10b981';
+                statusCell.style.fontWeight = 'normal';
+                row.style.backgroundColor = '';
+              }
+            } else {
+              statusCell.textContent = '-';
+            }
+          });
+
+          plotDistribution(countChartId, counts, countMean, lcl, ucl, 'Count Distribution', chartInstances, countTarget);
 
           // 2. Strength Chart
           const strengthChartId = 'chart_strength_dist';
@@ -3029,8 +3067,8 @@
 
         const lines = [
           { value: mean, color: '#111827', dash: [], label: `Mean: ${mean.toFixed(3)}`, labelBg: '#111827' },
-          { value: lcl, color: '#7c3aed', dash: [6, 6], label: `LCL: ${lcl.toFixed(3)}`, labelBg: '#7c3aed' },
-          { value: ucl, color: '#7c3aed', dash: [6, 6], label: `UCL: ${ucl.toFixed(3)}`, labelBg: '#7c3aed' }
+          { value: lcl, color: '#ef4444', dash: [], label: `LCL: ${lcl.toFixed(3)}`, labelBg: '#ef4444' },
+          { value: ucl, color: '#ef4444', dash: [], label: `UCL: ${ucl.toFixed(3)}`, labelBg: '#ef4444' }
         ];
 
         if (targetValueOrNull !== null && isFinite(targetValueOrNull)) {
