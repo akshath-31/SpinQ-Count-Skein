@@ -1920,6 +1920,33 @@
         const strengthLims = limitsFromMean(strengthMean, 10.0);
         plotDistribution(strengthChartId, strengths, strengthMean, strengthLims.lcl, strengthLims.ucl, 'Strength Distribution', chartInstances, null);
 
+        // -----------------------------
+        // POPULATE currentTest FOR SAVING
+        // -----------------------------
+        currentTest = {
+          reportNumber: document.getElementById('reportNumber')?.value || '',
+          operatorName: document.getElementById('operatorName')?.value || '',
+          machineId: document.getElementById('selMachine')?.value || '',
+          product: document.getElementById('selProduct')?.value || '',
+          process: document.getElementById('selProcess')?.value || '',
+          lotNumber: document.getElementById('selLot')?.value || '',
+          yarnCount: document.getElementById('selCount')?.value || '',
+          testDate: document.getElementById('testDate')?.value || '',
+          dateTime: new Date().toLocaleString(),
+          avgCount: avgCount,
+          avgStrength: avgStrength,
+          avgCSP: avgCSP,
+          countCV: countCV,
+          rangePercent: rangeVal,
+          lcl: lcl.toFixed(2),
+          ucl: ucl.toFixed(2),
+          sampleCount: n,
+          testType: 'Count & Strength',
+          rawData: { counts, strengths, csps: csps }
+        };
+
+        console.log("✓ currentTest populated:", currentTest);
+
       } catch (e) {
         console.error(e);
         alert("Error calculating results: " + e.message);
@@ -3635,8 +3662,19 @@
 
       tbody.innerHTML = '';
       saved.slice().reverse().forEach((test, revIndex) => {
-        const summary = formatProductSummary(test.summaryByProduct);
-        const targetsText = formatTargets(test.targets);
+        // Handle different test types
+        let summary = '';
+        let targetsText = '';
+
+        if (test.testType === 'Count & Strength') {
+          // Count & Strength test - display metrics
+          summary = `Avg Count: ${test.avgCount || 'N/A'}, Avg Strength: ${test.avgStrength || 'N/A'}, Avg CSP: ${test.avgCSP || 'N/A'}`;
+          targetsText = test.yarnCount || 'N/A';
+        } else {
+          // Sliver/Carding test - use summaryByProduct
+          summary = formatProductSummary(test.summaryByProduct);
+          targetsText = formatTargets(test.targets);
+        }
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
