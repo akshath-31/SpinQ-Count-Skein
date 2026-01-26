@@ -1218,7 +1218,9 @@
 
     <div id="testSection" style="display:none;">
       <h2>Data Entry (Count & Strength)</h2>
-      <div style="margin-bottom: 10px; display: flex; justify-content: flex-end;">
+      <div style="margin-bottom: 10px; display: flex; justify-content: flex-end; gap: 10px;">
+        <button type="button" class="btn-primary" id="btnConnectScale" onclick="toggleScaleConnection()"
+          style="background: #e67e22; padding: 8px 12px; font-size: 14px;">Connect Scale (RS232)</button>
         <button onclick="addSampleRow()" class="btn-start" style="padding: 8px 12px; font-size: 14px;">+ Add
           Row</button>
       </div>
@@ -1241,8 +1243,6 @@
       </table>
 
       <div style="text-align:center; margin: 14px 0;">
-        <button type="button" class="btn-primary" id="btnConnectScale" onclick="connectScale()"
-          style="background: #e67e22; margin-right: 10px;">Connect Scale (RS232)</button>
         <button type="button" id="calcBtn" onclick="calculateResults()">Calculate Results</button>
         <button type="button" class="btn-save" id="saveBtn" disabled>Save Test</button>
         <button type="button" class="btn-print" id="printCurrentBtn" onclick="handlePrintClick('all')"
@@ -5984,7 +5984,31 @@
       if (sourceCell) sourceCell.textContent = type;
     }
 
-    async function connectScale() {
+    async function toggleScaleConnection() {
+      const btn = document.getElementById('btnConnectScale');
+
+      // If already connected, disconnect
+      if (serialPort && serialPort.readable) {
+        try {
+          // Cancel the reader to break the loop
+          if (serialReader) {
+            await serialReader.cancel();
+          }
+          // The loop in readSerialLoop will release lock and we can close
+          // But we need to wait a tiny bit or logic handles it
+          // Actually, we just signal intention.
+          // Correct implementation: reader.cancel() resolves read() with done=true.
+          // Then loop exits. then releaseLock().
+
+          btn.textContent = "Connect Scale (RS232)";
+          btn.style.background = "#e67e22";
+        } catch (e) {
+          console.error("Disconnect error:", e);
+        }
+        return;
+      }
+
+      // Connect Logic
       if (!('serial' in navigator)) {
         alert("Web Serial API not supported in this browser. Please use Chrome or Edge.");
         return;
@@ -5994,8 +6018,8 @@
         serialPort = await navigator.serial.requestPort();
         await serialPort.open({ baudRate: 9600 });
 
-        document.getElementById('btnConnectScale').textContent = "Scale Connected";
-        document.getElementById('btnConnectScale').style.background = "#27ae60";
+        btn.textContent = "Disconnect Scale";
+        btn.style.background = "#c0392b"; // Red for disconnect action
 
         // Start reading loop
         readSerialLoop();
@@ -6011,8 +6035,10 @@
         try {
           while (true) {
             const { value, done } = await serialReader.read();
-            if (done) break;
-
+            if (done) {
+              // Reader cancelled
+              break;
+            }
             // value is a Uint8Array. Decode it.
             const text = new TextDecoder().decode(value);
             handleSerialData(text);
@@ -6022,6 +6048,11 @@
         } finally {
           serialReader.releaseLock();
         }
+      }
+      // If we get here, port might be closable
+      if (serialPort) {
+        await serialPort.close();
+        serialPort = null;
       }
     }
 
