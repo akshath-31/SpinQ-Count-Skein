@@ -1085,16 +1085,16 @@
   <!-- CONFIGURATION VIEW -->
 
   <!-- CONFIGURATION VIEW -->
+  <!-- RESTORING LOGIN STRUCTURAL DIVS (Safety) -->
+  <div id="loginView" class="container-center" style="display: none;"></div>
+  <div id="signupView" class="container-center" style="display: none;"></div>
+
   <!-- CONFIGURATION REMOVED FOR DEBUGGING -->
 
   <!-- MAIN APP VIEW -->
   <!-- MAIN APP VIEW -->
   <div id="mainAppView" class="container"
     style="display: block !important; visibility: visible !important; opacity: 1 !important; min-height: 500px;">
-    <div
-      style="background: yellow; color: red; font-size: 20px; font-weight: bold; padding: 10px; border: 2px solid red; text-align: center; margin-bottom: 20px;">
-      SYSTEM ACTIVE - IF YOU SEE THIS, THE APP IS LOADING
-    </div>
     <div class="header">
       <div style="min-width:180px; color:#7f8c8d; font-weight:600;">SPINWISELY</div>
       <div class="app-title">Count and Skein Strength Test</div>
@@ -2530,7 +2530,7 @@
     // -----------------------------
     // Initialize
     // Initialize
-    window.onload_DISABLED = function () {
+    window.onload = function () {
       try {
         loadProductConfigs(); // Load saved targets & card ranges
         loadOperatorHistory(); // Load operator defaults
