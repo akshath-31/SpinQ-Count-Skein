@@ -1779,7 +1779,12 @@
         const current = el.value;
         el.innerHTML = '<option value="">Select...</option>' +
           arr.map(opt => `<option value="${opt}">${opt}</option>`).join('');
-        if (arr.includes(current)) el.value = current;
+        if (arr.includes(current)) {
+          el.value = current;
+        } else if (arr.length > 0) {
+          // Prefill first value if no selection
+          el.value = arr[0];
+        }
       }
 
       fill('selMachine', machines);
