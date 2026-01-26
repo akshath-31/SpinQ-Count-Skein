@@ -1230,6 +1230,7 @@
             <th>Sample #</th>
             <th>Position #</th>
             <th>Weight (g)</th>
+            <th>Source</th>
             <th>Count (Ne)</th>
             <th>Strength (lbs)</th>
             <th>CSP (Calc)</th>
@@ -1240,6 +1241,8 @@
       </table>
 
       <div style="text-align:center; margin: 14px 0;">
+        <button type="button" class="btn-primary" id="btnConnectScale" onclick="connectScale()"
+          style="background: #e67e22; margin-right: 10px;">Connect Scale (RS232)</button>
         <button type="button" id="calcBtn" onclick="calculateResults()">Calculate Results</button>
         <button type="button" class="btn-save" id="saveBtn" disabled>Save Test</button>
         <button type="button" class="btn-print" id="printCurrentBtn" onclick="handlePrintClick('all')"
@@ -1870,7 +1873,8 @@
       tr.innerHTML = `
             <td>${idx}</td>
             <td><input type="text" class="card-input pos-val" placeholder="#"></td>
-            <td><input type="number" class="card-input weight-val scale-input" id="weight_${idx}" oninput="calcRow(this)" step="0.01"></td>
+            <td><input type="number" class="card-input weight-val scale-input" id="weight_${idx}" oninput="updateSource(this); calcRow(this)" step="0.01" onfocus="setActiveInput(this)"></td>
+            <td class="source-cell" style="font-size: 11px; color: #7f8c8d; text-align: center;">Manual</td>
             <td class="count-val" style="font-weight:bold;">-</td>
             <td><input type="number" class="card-input strength-val" oninput="calcRow(this)" step="0.1"></td>
             <td class="csp-val" style="font-weight:bold;">-</td>
@@ -2193,6 +2197,7 @@
             sample: row.cells[0]?.textContent || (i + 1).toString(),
             pos: row.querySelector('.pos-val')?.value || '',
             weight: row.querySelector('.weight-val')?.value || '',
+            source: row.querySelector('.source-cell')?.textContent || 'Manual',
             count: row.querySelector('.count-val')?.textContent || '-',
             strength: row.querySelector('.strength-val')?.value || '',
             csp: row.querySelector('.csp-val')?.textContent || '-'
@@ -5107,6 +5112,7 @@
               <td style="padding: 6px 8px; border: 1px solid #d1d5db; text-align: center;">${sampleNum}</td>
               <td style="padding: 6px 8px; border: 1px solid #d1d5db; text-align: center;">${idx + 1}</td>
               <td style="padding: 6px 8px; border: 1px solid #d1d5db; text-align: right;">${weight}</td>
+              <td style="padding: 6px 8px; border: 1px solid #d1d5db; text-align: center; color: #666;">${row.querySelector('.source-cell')?.textContent || 'Manual'}</td>
               <td style="padding: 6px 8px; border: 1px solid #d1d5db; text-align: right;">${count}</td>
               <td style="padding: 6px 8px; border: 1px solid #d1d5db; text-align: right;">${strength}</td>
               <td style="padding: 6px 8px; border: 1px solid #d1d5db; text-align: right;">${csp}</td>
@@ -5123,6 +5129,7 @@
             <th style="padding: 8px; border: 1px solid #d1d5db; text-align: center;">Sample #</th>
             <th style="padding: 8px; border: 1px solid #d1d5db; text-align: center;">Position #</th>
             <th style="padding: 8px; border: 1px solid #d1d5db; text-align: center;">Weight (g)</th>
+            <th style="padding: 8px; border: 1px solid #d1d5db; text-align: center;">Source</th>
             <th style="padding: 8px; border: 1px solid #d1d5db; text-align: center;">Count (Ne)</th>
             <th style="padding: 8px; border: 1px solid #d1d5db; text-align: center;">Strength (lbs)</th>
             <th style="padding: 8px; border: 1px solid #d1d5db; text-align: center;">CSP (Calc)</th>
@@ -5957,6 +5964,122 @@
         if (btn) btn.textContent = scaleConnected ? 'Disconnect Scale' : 'Connect Scale';
       }
     };
+  </script>
+  <script>
+    // -----------------------------
+    // RS232 SCALE INTEGRATION
+    // -----------------------------
+    let serialPort = null;
+    let serialReader = null;
+    let activeWeightInput = null;
+
+    function setActiveInput(input) {
+      activeWeightInput = input;
+    }
+
+    // Function to update Source based on manual entry vs scale
+    function updateSource(input, type = 'Manual') {
+      const row = input.closest('tr');
+      const sourceCell = row.querySelector('.source-cell');
+      if (sourceCell) sourceCell.textContent = type;
+    }
+
+    async function connectScale() {
+      if (!('serial' in navigator)) {
+        alert("Web Serial API not supported in this browser. Please use Chrome or Edge.");
+        return;
+      }
+
+      try {
+        serialPort = await navigator.serial.requestPort();
+        await serialPort.open({ baudRate: 9600 });
+
+        document.getElementById('btnConnectScale').textContent = "Scale Connected";
+        document.getElementById('btnConnectScale').style.background = "#27ae60";
+
+        // Start reading loop
+        readSerialLoop();
+      } catch (err) {
+        console.error('Serial Connection Error:', err);
+        alert('Failed to connect to scale: ' + err.message);
+      }
+    }
+
+    async function readSerialLoop() {
+      while (serialPort.readable) {
+        serialReader = serialPort.readable.getReader();
+        try {
+          while (true) {
+            const { value, done } = await serialReader.read();
+            if (done) break;
+
+            // value is a Uint8Array. Decode it.
+            const text = new TextDecoder().decode(value);
+            handleSerialData(text);
+          }
+        } catch (err) {
+          console.error(err);
+        } finally {
+          serialReader.releaseLock();
+        }
+      }
+    }
+
+    let serialBuffer = "";
+    function handleSerialData(chunk) {
+      serialBuffer += chunk;
+
+      // Common scale newlines: \r\n or \r
+      if (serialBuffer.includes('\n') || serialBuffer.includes('\r')) {
+        const lines = serialBuffer.split(/[\r\n]+/);
+        serialBuffer = lines.pop(); // Keep incomplete chunk
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+
+          // Regex to extract number (supports 12.34 g, + 12.34, etc)
+          const match = line.match(/[-+]?[\d]*\.?[\d]+/);
+          if (match) {
+            const weight = parseFloat(match[0]);
+            if (!isNaN(weight)) {
+              applyScaleWeight(weight);
+            }
+          }
+        }
+      }
+    }
+
+    function applyScaleWeight(weight) {
+      // Use active input, or find first empty weight input if none active
+      let targetInput = activeWeightInput;
+
+      if (!targetInput) {
+        // Find first empty weight input
+        const inputs = document.querySelectorAll('.weight-val');
+        for (const input of inputs) {
+          if (!input.value) {
+            targetInput = input;
+            break;
+          }
+        }
+      }
+
+      if (targetInput) {
+        targetInput.value = weight;
+        updateSource(targetInput, 'Scale');
+
+        // Trigger calc
+        const event = new Event('input', { bubbles: true });
+        targetInput.dispatchEvent(event);
+
+        // Flash effect
+        targetInput.style.backgroundColor = "#d1fae5";
+        setTimeout(() => targetInput.style.backgroundColor = "", 500);
+
+        // Move focus to next input? Optional.
+        // For now, keep focus or move to strength?
+      }
+    }
   </script>
 </body>
 
