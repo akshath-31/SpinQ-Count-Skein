@@ -1039,41 +1039,39 @@
 
 <body>
   <script>
+    // Debug script to ensure app visibility and hide blockers
+    window.onerror = function (msg, url, line) {
+      console.error("Error: " + msg + "\nLine: " + line);
+    };
+
     document.addEventListener('DOMContentLoaded', function () {
       try {
+        // 1. Hide potential blockers (Modals, Overlays)
+        const overlays = document.querySelectorAll('.modal-overlay, .mobile-warning, #saveConfirmModal');
+        overlays.forEach(el => {
+          el.style.display = 'none';
+          el.style.visibility = 'hidden';
+        });
+
+        // 2. Force Main App Visibility
         const app = document.getElementById('mainAppView');
-        if (!app) {
-          alert("CRITICAL: mainAppView NOT FOUND");
-          return;
+        if (app) {
+          app.style.display = 'block';
+          app.style.visibility = 'visible';
+          app.style.opacity = '1';
+          app.style.zIndex = '1'; // Reset z-index to avoid stacking issues
+          // Remove debug styles
+          app.style.border = 'none';
+          app.style.position = 'static';
+          app.style.minHeight = 'auto'; // Let content decide height
         }
 
-        const style = window.getComputedStyle(app);
-        const info = "App Found:\\n" +
-          "Content Length: " + app.innerHTML.length + "\\n" +
-          "Display: " + style.display + "\\n" +
-          "Visibility: " + style.visibility + "\\n" +
-          "Opacity: " + style.opacity + "\\n" +
-          "Z-Index: " + style.zIndex + "\\n" +
-          "Height: " + style.height + "\\n" +
-          "Width: " + style.width;
-
-        alert(info);
-
-        // Force visibility
-        app.style.display = 'block';
-        app.style.visibility = 'visible';
-        app.style.opacity = '1';
-        app.style.zIndex = '999999';
-        app.style.position = 'relative';
-        app.style.border = '5px solid red';
-        app.style.backgroundColor = 'white';
-        app.style.minHeight = '500px';
-
+        // 3. Ensure Body is White
         document.body.style.backgroundColor = 'white';
-        document.body.style.overflow = 'visible';
+        document.body.style.overflow = 'auto';
 
       } catch (e) {
-        alert("Debug Error: " + e.message);
+        console.error("Debug Error: " + e.message);
       }
     });
   </script>
