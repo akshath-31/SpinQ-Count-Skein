@@ -1881,13 +1881,34 @@
         const countMetricStyle = isCountOutOfRange ?
           'background-color: #ef4444 !important;' : '';
 
+        // Check if CV% is out of acceptable range (> 1.5%)
+        const cvNum = parseFloat(countCV);
+        const isCVOutOfRange = cvNum > 1.5;
+        const cvMetricStyle = isCVOutOfRange ?
+          'background-color: #ef4444 !important;' : '';
+
+        // Calculate % of readings outside limits
+        let outOfLimitCount = 0;
+        tableRows.forEach(row => {
+          const countCell = row.querySelector('.count-val');
+          const cVal = parseFloat(countCell.textContent);
+          if (isFinite(cVal) && (cVal < lcl || cVal > ucl)) {
+            outOfLimitCount++;
+          }
+        });
+        const outOfLimitPercent = n > 0 ? ((outOfLimitCount / n) * 100).toFixed(1) : '0.0';
+        const isOutOfLimitNonZero = parseFloat(outOfLimitPercent) > 0;
+        const outOfLimitStyle = isOutOfLimitNonZero ?
+          'background-color: #ef4444 !important;' : '';
+
         // Update metrics display with conditional red styling
         const metricsDiv = document.getElementById('metrics');
         metricsDiv.innerHTML = `
              <div class="metric" style="${countMetricStyle}"><div class="label">Avg Count</div><div class="value">${avgCount}</div></div>
              <div class="metric"><div class="label">Avg Strength</div><div class="value">${avgStrength}</div></div>
              <div class="metric"><div class="label">Avg CSP</div><div class="value">${avgCSP}</div></div>
-             <div class="metric"><div class="label">Count CV%</div><div class="value">${countCV}%</div></div>
+             <div class="metric" style="${cvMetricStyle}"><div class="label">Count CV%</div><div class="value">${countCV}%</div></div>
+             <div class="metric" style="${outOfLimitStyle}"><div class="label">Out of Limit</div><div class="value">${outOfLimitPercent}%</div></div>
           `;
         metricsDiv.style.display = 'flex';
 
@@ -1962,6 +1983,8 @@
           lcl: lcl.toFixed(2),
           ucl: ucl.toFixed(2),
           sampleCount: n,
+          outOfLimitPercent: outOfLimitPercent,
+          outOfLimitCount: outOfLimitCount,
           testType: 'Count & Strength',
           rawData: { counts, strengths, csps: csps }
         };
@@ -4752,8 +4775,16 @@
         <div><strong>Lot Number:</strong> ${escapeHtml(test.lotNumber || '-')} | <strong>Yarn Count:</strong> ${escapeHtml(test.yarnCount || '-')}</div>
       `;
 
-      // Print metrics
+      // Print metrics with conditional styling
       const countMetricStyle = (parseFloat(test.avgCount) < parseFloat(test.lcl) || parseFloat(test.avgCount) > parseFloat(test.ucl)) ?
+        'background-color: #ef4444 !important;' : 'background-color: #3498db !important;';
+
+      const cvNum = parseFloat(test.countCV);
+      const cvMetricStyle = (cvNum > 1.5) ?
+        'background-color: #ef4444 !important;' : 'background-color: #3498db !important;';
+
+      const outOfLimitPercent = test.outOfLimitPercent || '0.0';
+      const outOfLimitStyle = (parseFloat(outOfLimitPercent) > 0) ?
         'background-color: #ef4444 !important;' : 'background-color: #3498db !important;';
 
       printMetrics.innerHTML = `
@@ -4769,9 +4800,13 @@
           <div class="label">Avg CSP</div>
           <div class="value">${test.avgCSP || '-'}</div>
         </div>
-        <div class="print-metric" style="background-color: #3498db !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">
+        <div class="print-metric" style="${cvMetricStyle} -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">
           <div class="label">Count CV%</div>
           <div class="value">${test.countCV || '-'}%</div>
+        </div>
+        <div class="print-metric" style="${outOfLimitStyle} -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">
+          <div class="label">Out of Limit</div>
+          <div class="value">${outOfLimitPercent}%</div>
         </div>
         <div class="print-metric" style="background-color: #f8f9fa !important; color: #333 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">
           <div class="label">LCL / UCL</div>
