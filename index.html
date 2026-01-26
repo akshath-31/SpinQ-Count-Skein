@@ -1604,6 +1604,33 @@
     const USERS_KEY = 'spinQ_users';
     const CONFIG_KEY = 'spinQ_config';
 
+    function initDefaults() {
+      let config = {};
+      try {
+        config = JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}');
+      } catch (e) { }
+
+      let changed = false;
+      const defaults = {
+        machines: 'S101',
+        products: 'Carded',
+        processes: 'Spinning',
+        lots: 'Lot 001',
+        counts: 'Ne 30'
+      };
+
+      for (const [key, val] of Object.entries(defaults)) {
+        if (!config[key] || config[key].trim() === '') {
+          config[key] = val;
+          changed = true;
+        }
+      }
+
+      if (changed) {
+        localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+      }
+    }
+
     function getUsers() {
       try { return JSON.parse(localStorage.getItem(USERS_KEY) || '{}'); } catch { return {}; }
     }
@@ -1772,15 +1799,6 @@
       const lots = getConfigOptions('lots');
       const counts = getConfigOptions('counts');
 
-      // SPECIFIC DEFAULTS as requested
-      const DEFAULTS = {
-        'selMachine': 'S101',
-        'selProduct': 'Carded',
-        'selProcess': 'Spinning',
-        'selLot': 'Lot 001',
-        'selCount': 'Ne 30'
-      };
-
       function fill(id, arr) {
         const el = document.getElementById(id);
         if (!el) return;
@@ -1788,16 +1806,7 @@
         const current = el.value;
         el.innerHTML = '<option value="">Select...</option>' +
           arr.map(opt => `<option value="${opt}">${opt}</option>`).join('');
-
-        if (arr.includes(current)) {
-          el.value = current;
-        } else {
-          // If no current selection, try to set specific default
-          const def = DEFAULTS[id];
-          if (def && arr.includes(def)) {
-            el.value = def;
-          }
-        }
+        if (arr.includes(current)) el.value = current;
       }
 
       fill('selMachine', machines);
@@ -2652,6 +2661,8 @@
     // -----------------------------
     // Initialize
     window.onload = function () {
+      initDefaults();
+      // On load, apply any existing config (target, range etc.)
       try {
         loadProductConfigs(); // Load saved targets & card ranges
         loadOperatorHistory(); // Load operator defaults
