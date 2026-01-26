@@ -5085,13 +5085,15 @@
       setTimeout(() => {
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
+            console.log('About to print. Chart instances:', printChartInstances.size);
+            console.log('Print charts container children:', printChartsContainer.children.length);
             try { window.print(); } catch (e) { alert('Print failed. Use Ctrl+P / Cmd+P.'); restore(); return; }
             const after = () => { restore(); window.removeEventListener('afterprint', after); };
             window.addEventListener('afterprint', after);
             setTimeout(restore, 1400);
           });
         });
-      }, 600);
+      }, 1200);
     }
 
     function printSelected() {
