@@ -6066,11 +6066,13 @@
 
       if (targetInput) {
         targetInput.value = weight;
-        updateSource(targetInput, 'Scale');
 
-        // Trigger calc
+        // Trigger calc (this triggers oninput="updateSource(this)" which sets Manual)
         const event = new Event('input', { bubbles: true });
         targetInput.dispatchEvent(event);
+
+        // Overwrite Source to Scale AFTER the event
+        updateSource(targetInput, 'Scale');
 
         // Flash effect
         targetInput.style.backgroundColor = "#d1fae5";
