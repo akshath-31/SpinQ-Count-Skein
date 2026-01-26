@@ -1453,6 +1453,27 @@
           style="display:inline-block; background:#e67e22;">Export to PDF</button>
       </div>
 
+      <!-- Combined View Panel -->
+      <div id="combinedDetailsPanel" class="details-panel"
+        style="display:none; margin: 20px 0; border:2px solid #3498db;">
+        <div class="details-header"
+          style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid #e2e8f0; padding-bottom:12px;">
+          <h2 style="margin:0; font-size:20px; color:#1e293b;">Combined Data Analysis</h2>
+          <button class="btn-muted" onclick="closeCombinedDetails()">Close Analysis</button>
+        </div>
+
+        <div id="combinedMetrics"
+          style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:15px; margin-bottom:25px;">
+          <!-- Metrics injected here -->
+        </div>
+
+        <div class="charts-grid"
+          style="display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap:20px;">
+          <div id="combined_avg_chart_container"></div>
+          <div id="combined_single_chart_container"></div>
+        </div>
+      </div>
+
       <table id="savedTable">
         <thead>
           <tr>
@@ -1488,26 +1509,6 @@
       </div>
     </div>
 
-    <!-- Combined View Panel -->
-    <div id="combinedDetailsPanel" class="details-panel"
-      style="display:none; margin: 20px 0; border:2px solid #3498db;">
-      <div class="details-header"
-        style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid #e2e8f0; padding-bottom:12px;">
-        <h2 style="margin:0; font-size:20px; color:#1e293b;">Combined Data Analysis</h2>
-        <button class="btn-muted" onclick="closeCombinedDetails()">Close Analysis</button>
-      </div>
-
-      <div id="combinedMetrics"
-        style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:15px; margin-bottom:25px;">
-        <!-- Metrics injected here -->
-      </div>
-
-      <div class="charts-grid"
-        style="display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap:20px;">
-        <div id="combined_avg_chart_container"></div>
-        <div id="combined_single_chart_container"></div>
-      </div>
-    </div>
   </div>
 
   <!-- PRINT SECTION -->
