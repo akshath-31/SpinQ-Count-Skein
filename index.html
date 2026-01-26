@@ -4879,7 +4879,18 @@
       }
     }
 
+    let isPrinting = false; // Guard flag to prevent double-calling
+
     function printCountStrengthTest(test, mode = 'all') {
+      console.log('printCountStrengthTest called with mode:', mode, 'isPrinting:', isPrinting);
+      console.trace('Call stack');
+
+      if (isPrinting) {
+        console.warn('Already printing, ignoring duplicate call');
+        return;
+      }
+      isPrinting = true;
+
       const printSection = document.getElementById('printSection');
       const printMeta = document.getElementById('printMeta');
       const printChartsContainer = document.getElementById('printChartsContainer');
@@ -5077,6 +5088,7 @@
       `;
 
       const restore = () => {
+        isPrinting = false; // Reset guard flag
         printSection.style.cssText = 'display:none; position:absolute; left:-9999px; top:0;';
         if (mainContainer) mainContainer.style.display = originalDisplay || 'block';
         for (const ch of printChartInstances.values()) ch.destroy();
