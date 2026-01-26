@@ -1243,11 +1243,11 @@
         <button type="button" id="calcBtn" onclick="calculateResults()">Calculate Results</button>
         <button type="button" class="btn-save" id="saveBtn" disabled>Save Test</button>
         <button type="button" class="btn-print" id="printCurrentBtn" onclick="handlePrintClick('all')"
-          style="display:none;">Print Current</button>
+          style="opacity: 0.5; cursor: not-allowed;">Print Current</button>
         <button type="button" class="btn-print" id="printCountOnlyBtn" onclick="handlePrintClick('countOnly')"
-          style="background: #27ae60; display:none;">Print Current (Only Count Chart)</button>
+          style="background: #27ae60; opacity: 0.5; cursor: not-allowed;">Print Current (Only Count Chart)</button>
         <button type="button" class="btn-print" id="printNoChartsBtn" onclick="handlePrintClick('noCharts')"
-          style="background: #8e44ad; display:none;">Print Current (No Charts)</button>
+          style="background: #8e44ad; opacity: 0.5; cursor: not-allowed;">Print Current (No Charts)</button>
       </div>
 
       <!-- Metrics for Count/Strength -->
@@ -1825,10 +1825,19 @@
       isDataCalculated = false;
       isDataModified = false;
 
-      // Hide print buttons for new test
-      document.getElementById('printCurrentBtn').style.display = 'none';
-      document.getElementById('printCountOnlyBtn').style.display = 'none';
-      document.getElementById('printNoChartsBtn').style.display = 'none';
+      // Reset print buttons to dull state for new test
+      const printBtns = [
+        document.getElementById('printCurrentBtn'),
+        document.getElementById('printCountOnlyBtn'),
+        document.getElementById('printNoChartsBtn')
+      ];
+
+      printBtns.forEach(btn => {
+        if (btn) {
+          btn.style.opacity = '0.5';
+          btn.style.cursor = 'not-allowed';
+        }
+      });
     }
 
     function resetTable(totalSamples, subsamples) {
@@ -1911,7 +1920,14 @@
     }
 
     // Handle Print button click with auto-calculate
+    // Handle Print button click with auto-calculate
     function handlePrintClick(mode = 'all') {
+      // Check if saved first
+      if (!isCurrentTestSaved) {
+        alert("Save results first");
+        return;
+      }
+
       if (isDataModified || !isDataCalculated) {
         console.log("Auto-calculating before print since data changed...");
         calculateResults();
@@ -2245,10 +2261,19 @@
         const saveBtn = document.getElementById('saveBtn');
         if (saveBtn) saveBtn.disabled = true;
 
-        // Show print buttons after save
-        document.getElementById('printCurrentBtn').style.display = 'inline-block';
-        document.getElementById('printCountOnlyBtn').style.display = 'inline-block';
-        document.getElementById('printNoChartsBtn').style.display = 'inline-block';
+        // Show print buttons after save - make them bright and clickable
+        const printBtns = [
+          document.getElementById('printCurrentBtn'),
+          document.getElementById('printCountOnlyBtn'),
+          document.getElementById('printNoChartsBtn')
+        ];
+
+        printBtns.forEach(btn => {
+          if (btn) {
+            btn.style.opacity = '1';
+            btn.style.cursor = 'pointer';
+          }
+        });
 
         // Lock all input fields to prevent editing after save
         document.querySelectorAll('#testTableBody .weight-val, #testTableBody .strength-val').forEach(input => {
