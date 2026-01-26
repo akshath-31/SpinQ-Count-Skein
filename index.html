@@ -1294,8 +1294,7 @@
 
           <div style="flex: 1; min-width: 150px;">
             <label class="filter-label" style="display:block; margin-bottom:5px;">Date Range</label>
-            <select id="srchDateRange" class="filter-input" onchange="onSrchDateRangeChange(); applySrchFilters();"
-              style="width:100%;">
+            <select id="srchDateRange" class="filter-input" onchange="onSrchDateRangeChange();" style="width:100%;">
               <option value="all">All Dates</option>
               <option value="today">Today</option>
               <option value="week">This Week</option>
@@ -1307,45 +1306,48 @@
           <div id="srchCustomDates" style="display: none; flex: 2; min-width: 250px; gap: 10px;">
             <div style="flex:1;">
               <label class="filter-label" style="display:block; margin-bottom:5px;">From</label>
-              <input type="date" id="srchDateFrom" class="filter-input" onchange="applySrchFilters()"
-                style="width:100%;">
+              <input type="date" id="srchDateFrom" class="filter-input" style="width:100%;">
             </div>
             <div style="flex:1;">
               <label class="filter-label" style="display:block; margin-bottom:5px;">To</label>
-              <input type="date" id="srchDateTo" class="filter-input" onchange="applySrchFilters()" style="width:100%;">
+              <input type="date" id="srchDateTo" class="filter-input" style="width:100%;">
             </div>
           </div>
 
           <div style="flex: 1; min-width: 130px;">
             <label class="filter-label" style="display:block; margin-bottom:5px;">Machine</label>
-            <select id="srchMachine" class="filter-input" onchange="applySrchFilters()" style="width:100%;">
+            <select id="srchMachine" class="filter-input" style="width:100%;">
               <option value="">All</option>
             </select>
           </div>
 
           <div style="flex: 1; min-width: 130px;">
             <label class="filter-label" style="display:block; margin-bottom:5px;">Lot</label>
-            <select id="srchLot" class="filter-input" onchange="applySrchFilters()" style="width:100%;">
+            <select id="srchLot" class="filter-input" style="width:100%;">
               <option value="">All</option>
             </select>
           </div>
 
           <div style="flex: 1; min-width: 130px;">
             <label class="filter-label" style="display:block; margin-bottom:5px;">Product</label>
-            <select id="srchProduct" class="filter-input" onchange="applySrchFilters()" style="width:100%;">
+            <select id="srchProduct" class="filter-input" style="width:100%;">
               <option value="">All</option>
             </select>
           </div>
 
           <div style="flex: 1; min-width: 130px;">
             <label class="filter-label" style="display:block; margin-bottom:5px;">Process</label>
-            <select id="srchProcess" class="filter-input" onchange="applySrchFilters()" style="width:100%;">
+            <select id="srchProcess" class="filter-input" style="width:100%;">
               <option value="">All</option>
             </select>
           </div>
 
-          <button class="btn-muted" onclick="clearSrchFilters()" style="padding: 10px 15px; height: 38px;">Clear
-            All</button>
+          <div style="display:flex; gap:10px;">
+            <button class="btn-start" onclick="applySrchFilters()"
+              style="padding: 10px 20px; height: 38px; background:#3498db;">Apply Filters</button>
+            <button class="btn-muted" onclick="clearSrchFilters()" style="padding: 10px 15px; height: 38px;">Clear
+              All</button>
+          </div>
         </div>
       </div>
 
@@ -1424,6 +1426,10 @@
         </thead>
         <tbody id="savedList"></tbody>
       </table>
+
+      <div style="margin-top:20px; display:flex; justify-content:center;">
+        <button class="btn-muted" onclick="clearSrchFilters()" style="padding: 10px 30px;">Clear All Filters</button>
+      </div>
     </div> <!-- End container -->
 
     <div id="saveConfirmModal" class="modal-overlay">
