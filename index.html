@@ -1445,6 +1445,8 @@
           Selected</button>
         <button class="btn-print" onclick="printSelected()" id="printSelectedBtn" style="display:none;">Print Selected
           (Combined)</button>
+        <button class="btn-start" onclick="viewCombinedData()" id="viewCombinedBtn"
+          style="display:none; background:#3498db;">View Combined Data</button>
         <button class="btn-save" onclick="exportToExcel()" id="exportExcelBtn"
           style="display:inline-block; background:#27ae60;">Export to Excel</button>
         <button class="btn-print" onclick="exportToPDF()" id="exportPDFBtn"
@@ -1467,6 +1469,7 @@
             <th>Avg Strength</th>
             <th>CSP</th>
             <th>Out of limit</th>
+            <th>No. Samples</th>
             <th>Details</th>
           </tr>
         </thead>
@@ -1482,6 +1485,27 @@
           <button type="button" class="btn-modal-cancel" id="btnModalCancel">Go Back</button>
           <button type="button" class="btn-modal-confirm" id="btnModalConfirm">Continue Saving</button>
         </div>
+      </div>
+    </div>
+
+    <!-- Combined View Panel -->
+    <div id="combinedDetailsPanel" class="details-panel"
+      style="display:none; margin: 20px 0; border:2px solid #3498db;">
+      <div class="details-header"
+        style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid #e2e8f0; padding-bottom:12px;">
+        <h2 style="margin:0; font-size:20px; color:#1e293b;">Combined Data Analysis</h2>
+        <button class="btn-muted" onclick="closeCombinedDetails()">Close Analysis</button>
+      </div>
+
+      <div id="combinedMetrics"
+        style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:15px; margin-bottom:25px;">
+        <!-- Metrics injected here -->
+      </div>
+
+      <div class="charts-grid"
+        style="display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap:20px;">
+        <div id="combined_avg_chart_container"></div>
+        <div id="combined_single_chart_container"></div>
       </div>
     </div>
   </div>
@@ -2408,6 +2432,7 @@
             <td>${escapeHtml(test.avgStrength || test.metrics?.avgStrength || '-')}</td>
             <td>${escapeHtml(test.avgCSP || test.metrics?.avgCSP || '-')}</td>
             <td>${escapeHtml(test.outOfLimitCount || '0.0')}%</td>
+            <td><strong>${(test.rows || []).length}</strong></td>
             <td><button class="btn-muted" style="margin:0; padding:8px 12px;" onclick="viewDetailsByRow(event, ${revIndex})">View Details</button></td>
           `;
         } else {
@@ -2415,6 +2440,7 @@
           const isLegacySliver = !test.testType && test.productsPresent;
           const summary = formatProductSummary(test.summaryByProduct);
           const targetsText = (typeof formatTargets === 'function') ? formatTargets(test.targets) : (test.yarnCount || test.targetCount || '-');
+          const sliverSamples = test.cardRows ? test.cardRows.length : (test.samples ? (test.samples.length || 0) : 0);
 
           tr.innerHTML = `
             <td><input type="checkbox" onchange="onSavedSelectionChanged(this)"></td>
@@ -2423,6 +2449,7 @@
             <td colspan="4" style="text-align:left; font-size:11px; color:#666;">Sliver/Carding: ${escapeHtml(summary)}</td>
             <td>${escapeHtml(targetsText)}</td>
             <td colspan="5">-</td>
+            <td><strong>${sliverSamples}</strong></td>
             <td><button class="btn-muted" style="margin:0; padding:8px 12px;" onclick="viewDetailsByRow(event, ${revIndex})">View Details</button></td>
           `;
         }
@@ -2482,10 +2509,14 @@
       }
 
       const anyChecked = selected.length > 0;
+      const multipleChecked = selected.length > 1;
       const deleteBtn = document.getElementById('deleteBtn');
       const printSelectedBtn = document.getElementById('printSelectedBtn');
+      const viewCombinedBtn = document.getElementById('viewCombinedBtn');
+
       if (deleteBtn) deleteBtn.style.display = anyChecked ? 'inline-block' : 'none';
       if (printSelectedBtn) printSelectedBtn.style.display = anyChecked ? 'inline-block' : 'none';
+      if (viewCombinedBtn) viewCombinedBtn.style.display = multipleChecked ? 'inline-block' : 'none';
     }
 
     function toggleSelectAll(master) {
@@ -4964,9 +4995,9 @@
       detailRow.className = 'detail-row';
       detailRow.id = `detail-row-${revIndex}`;
 
-      // We have 14 columns
+      // We have 15 columns
       detailRow.innerHTML = `
-        <td colspan="14">
+        <td colspan="15">
           <div class="inline-details-container">
             <div class="details-header" style="padding-bottom:12px; border-bottom:1px solid #e5e7eb; margin-bottom:15px; display:flex; justify-content:space-between; align-items:flex-start;">
               <div>
@@ -6066,6 +6097,114 @@
         showError("PDF export failed: " + (e && e.message ? e.message : String(e)));
         console.error(e);
       }
+    }
+
+    let combinedChartInstances = new Map();
+
+    function viewCombinedData() {
+      const indices = getSelectedSavedIndices();
+      if (indices.length < 2) return;
+      const saved = getSavedTests();
+      const selectedTests = indices.map(i => saved[i]).filter(Boolean);
+
+      const panel = document.getElementById('combinedDetailsPanel');
+      panel.style.display = 'block';
+      panel.scrollIntoView({ behavior: 'smooth' });
+
+      // Calculations
+      let allAvgs = [];
+      let allSingles = [];
+      let allCSPs = [];
+      let oocTests = 0;
+      let oocSingles = 0;
+
+      // Use target/limits from first test
+      const ref = selectedTests[0];
+      const lcl = parseFloat(ref.lcl);
+      const ucl = parseFloat(ref.ucl);
+      const target = parseFloat(ref.yarnCount || ref.targetCount);
+
+      selectedTests.forEach(test => {
+        const avg = parseFloat(test.avgCount);
+        allAvgs.push(avg);
+        if (avg < lcl || avg > ucl) oocTests++;
+
+        if (test.rawData && test.rawData.counts) {
+          test.rawData.counts.forEach(c => {
+            const val = parseFloat(c);
+            allSingles.push(val);
+            if (val < lcl || val > ucl) oocSingles++;
+          });
+        }
+
+        if (test.avgCSP !== '-') allCSPs.push(parseFloat(test.avgCSP));
+      });
+
+      const avgOfAvgs = (allAvgs.reduce((a, b) => a + b, 0) / allAvgs.length).toFixed(2);
+      const avgCSP = allCSPs.length > 0 ? (allCSPs.reduce((a, b) => a + b, 0) / allCSPs.length).toFixed(0) : '-';
+
+      // Global CV calculation
+      let globalCV = '0.00';
+      if (allSingles.length > 1) {
+        const mean = allSingles.reduce((a, b) => a + b, 0) / allSingles.length;
+        const variance = allSingles.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / (allSingles.length - 1);
+        globalCV = ((Math.sqrt(variance) / mean) * 100).toFixed(2);
+      }
+
+      // Render Metrics
+      const metricsDiv = document.getElementById('combinedMetrics');
+
+      const avgOfAvgsStyle = (parseFloat(avgOfAvgs) < lcl || parseFloat(avgOfAvgs) > ucl) ? 'background:#ef4444; color:#fff;' : 'background:#3498db; color:#fff;';
+      const cvStyle = parseFloat(globalCV) > 1.5 ? 'background:#ef4444; color:#fff;' : 'background:#3498db; color:#fff;';
+      const oocTestsStyle = oocTests > 0 ? 'background:#ef4444; color:#fff;' : 'background:#3498db; color:#fff;';
+      const oocSinglesStyle = oocSingles > 0 ? 'background:#ef4444; color:#fff;' : 'background:#3498db; color:#fff;';
+
+      metricsDiv.innerHTML = `
+        <div class="print-metric" style="${avgOfAvgsStyle} border:none; padding:15px; border-radius:8px;">
+          <div class="label" style="opacity:0.9; font-size:12px;">Avg of Avgs (Ne)</div>
+          <div class="value" style="font-size:24px; font-weight:700;">${avgOfAvgs}</div>
+        </div>
+        <div class="print-metric" style="${cvStyle} border:none; padding:15px; border-radius:8px;">
+          <div class="label" style="opacity:0.9; font-size:12px;">Global Count CV%</div>
+          <div class="value" style="font-size:24px; font-weight:700;">${globalCV}%</div>
+        </div>
+        <div class="print-metric" style="background:#3498db; color:#fff; border:none; padding:15px; border-radius:8px;">
+          <div class="label" style="opacity:0.9; font-size:12px;">Avg CSP</div>
+          <div class="value" style="font-size:24px; font-weight:700;">${avgCSP}</div>
+        </div>
+        <div class="print-metric" style="${oocTestsStyle} border:none; padding:15px; border-radius:8px;">
+          <div class="label" style="opacity:0.9; font-size:12px;">OOC Tests</div>
+          <div class="value" style="font-size:24px; font-weight:700;">${oocTests}</div>
+        </div>
+        <div class="print-metric" style="${oocSinglesStyle} border:none; padding:15px; border-radius:8px;">
+          <div class="label" style="opacity:0.9; font-size:12px;">OOC Single Values</div>
+          <div class="value" style="font-size:24px; font-weight:700;">${oocSingles}</div>
+        </div>
+      `;
+
+      // Render Charts
+      destroyChartMap(combinedChartInstances, 'combined_avg_chart_container');
+      destroyChartMap(combinedChartInstances, 'combined_single_chart_container');
+
+      const avgContainer = document.getElementById('combined_avg_chart_container');
+      const singleContainer = document.getElementById('combined_single_chart_container');
+      avgContainer.innerHTML = '';
+      singleContainer.innerHTML = '';
+
+      const avgChartId = 'combined_avg_chart';
+      const singleChartId = 'combined_single_chart';
+
+      avgContainer.appendChild(makeChartCard('Average Counts Distribution (By Test)', avgChartId));
+      singleContainer.appendChild(makeChartCard('All Single Values Distribution', singleChartId));
+
+      plotDistribution(avgChartId, allAvgs, parseFloat(avgOfAvgs), lcl, ucl, 'Averages Distribution', combinedChartInstances, target);
+      plotDistribution(singleChartId, allSingles, parseFloat(avgOfAvgs), lcl, ucl, 'All Singles Distribution', combinedChartInstances, target);
+    }
+
+    function closeCombinedDetails() {
+      document.getElementById('combinedDetailsPanel').style.display = 'none';
+      destroyChartMap(combinedChartInstances, 'combined_avg_chart_container');
+      destroyChartMap(combinedChartInstances, 'combined_single_chart_container');
     }
 
     // -----------------------------
