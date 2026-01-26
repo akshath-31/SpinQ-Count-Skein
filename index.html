@@ -1772,6 +1772,15 @@
       const lots = getConfigOptions('lots');
       const counts = getConfigOptions('counts');
 
+      // SPECIFIC DEFAULTS as requested
+      const DEFAULTS = {
+        'selMachine': 'S101',
+        'selProduct': 'Carded',
+        'selProcess': 'Spinning',
+        'selLot': 'Lot 001',
+        'selCount': 'Ne 30'
+      };
+
       function fill(id, arr) {
         const el = document.getElementById(id);
         if (!el) return;
@@ -1779,11 +1788,15 @@
         const current = el.value;
         el.innerHTML = '<option value="">Select...</option>' +
           arr.map(opt => `<option value="${opt}">${opt}</option>`).join('');
+
         if (arr.includes(current)) {
           el.value = current;
-        } else if (arr.length > 0) {
-          // Prefill first value if no selection
-          el.value = arr[0];
+        } else {
+          // If no current selection, try to set specific default
+          const def = DEFAULTS[id];
+          if (def && arr.includes(def)) {
+            el.value = def;
+          }
         }
       }
 
