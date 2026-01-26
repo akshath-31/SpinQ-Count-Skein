@@ -1037,6 +1037,16 @@
 </head>
 
 <body>
+  <script>
+    // Fail-safe to ensure visibility
+    window.onerror = function (msg, url, line) {
+      alert("Error: " + msg + "\nLine: " + line);
+    };
+    document.addEventListener('DOMContentLoaded', function () {
+      const app = document.getElementById('mainAppView');
+      if (app) app.style.display = 'block';
+    });
+  </script>
   <!-- Mobile Warning Banner -->
   <div class="mobile-warning" id="mobileWarning">
     <span class="mobile-warning-icon">⚠️</span>
