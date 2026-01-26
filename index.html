@@ -2270,7 +2270,12 @@
           avgCSP: metrics.avgCSP || '-',
           countCV: metrics.countCV || '-',
           outOfLimitCount: document.getElementById('metrics')?.querySelectorAll('.value')[4]?.textContent?.replace('%', '') || '0.0',
-          testType: 'Count & Strength'
+          testType: 'Count & Strength',
+          rawData: (typeof currentTest !== 'undefined' && currentTest.rawData) ? JSON.parse(JSON.stringify(currentTest.rawData)) : null,
+          rangePercent: (typeof currentTest !== 'undefined') ? currentTest.rangePercent : 2.5,
+          lcl: (typeof currentTest !== 'undefined') ? currentTest.lcl : null,
+          ucl: (typeof currentTest !== 'undefined') ? currentTest.ucl : null,
+          yarnCount: count // Add for details view
         };
 
         // Save to Local Storage
@@ -4892,60 +4897,143 @@
 
       document.getElementById('detailsPanel').style.display = 'block';
       document.getElementById('detailsTitle').textContent = `Report ${test.reportNumber} — Details`;
-      document.getElementById('detailsMeta').innerHTML =
-        `Date/Time: <strong>${escapeHtml(test.dateTime || '-')}</strong> | Test Date: <strong>${escapeHtml(test.testDate || '-')}</strong> | Operator: <strong>${escapeHtml(test.operatorName || '-')}</strong><br>` +
-        `Targets: <strong>${escapeHtml(formatTargets(test.targets))}</strong>`;
 
-      const groups = groupData(test.cardRows || []);
-      const productsPresent = (test.productsPresent && test.productsPresent.length)
-        ? test.productsPresent
-        : Object.keys(groups);
-      // Support both old format (single range) and new format (per-product ranges)
-      const savedRanges = test.acceptableRanges || (test.acceptableRange !== undefined && test.acceptableRange !== null
-        ? Object.fromEntries(productsPresent.map(p => [p, test.acceptableRange]))
-        : Object.fromEntries(productsPresent.map(p => [p, 5.0])));
+      const isCountStrength = test.testType === 'Count & Strength';
 
-      renderGroupedCharts(groups, productsPresent.filter(p => groups[p] && groups[p].allValues.length > 0), 'detailsChartsGrid', detailsChartInstances, test.targets || {}, savedRanges);
-
-      const t = document.getElementById('detailsTable');
-      const targets = test.targets || {};
-      t.innerHTML = `
-      <thead>
-        <tr>
-          <th>Card #</th>
-          <th>Product</th>
-          <th>Target (g/m)</th>
-          <th>Coiler 1</th>
-          <th>Coiler 2</th>
-          <th>Coiler 3</th>
-          <th>Coiler 4</th>
-          <th>Avg</th>
-          <th>Min</th>
-          <th>Max</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${(test.cardRows || []).map(r => {
-        const targetValue = (r.product && targets[r.product] !== null && targets[r.product] > 0)
-          ? targets[r.product].toFixed(2)
-          : '-';
-        const coilers = (r.coilers || []).filter(v => v !== null && isFinite(v)).map(v => Number(v));
-        const coilerMin = coilers.length > 0 ? Math.min(...coilers).toFixed(3) : '-';
-        const coilerMax = coilers.length > 0 ? Math.max(...coilers).toFixed(3) : '-';
-        return `
-          <tr>
-            <td><strong>${r.cardNo}</strong></td>
-            <td>${escapeHtml(r.product || '')}</td>
-            <td style="font-weight: 600; color: #2c3e50;">${targetValue}</td>
-            ${(r.coilers || []).map(v => `<td>${v !== null && isFinite(v) ? Number(v).toFixed(3) : '-'}</td>`).join('')}
-            <td><strong>${r.avg !== null && isFinite(r.avg) ? Number(r.avg).toFixed(3) : '-'}</strong></td>
-            <td>${coilerMin}</td>
-            <td>${coilerMax}</td>
-          </tr>
+      if (isCountStrength) {
+        // --- Count & Strength Details ---
+        document.getElementById('detailsMeta').innerHTML = `
+          <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; font-size:13px;">
+            <div>Date/Time: <strong>${escapeHtml(test.dateTime || '-')}</strong></div>
+            <div>Machine: <strong>${escapeHtml(test.machine || '-')}</strong></div>
+            <div>Product: <strong>${escapeHtml(test.product || '-')}</strong></div>
+            <div>Process: <strong>${escapeHtml(test.process || '-')}</strong></div>
+            <div>Lot: <strong>${escapeHtml(test.lotNumber || '-')}</strong></div>
+            <div>Target Count: <strong>${escapeHtml(test.yarnCount || '-')}</strong></div>
+          </div>
+          <div style="margin-top:10px; padding:10px; background:#f8fafc; border-radius:6px; display:flex; gap:20px; font-size:14px; border:1px solid #e2e8f0;">
+            <span>Avg Count: <strong>${test.avgCount || '-'}</strong></span>
+            <span>Count CV%: <strong>${test.countCV || '-'}</strong></span>
+            <span>Avg Strength: <strong>${test.avgStrength || '-'}</strong></span>
+            <span>CSP: <strong>${test.avgCSP || '-'}</strong></span>
+            <span>Out of Limit: <strong style="color:${parseFloat(test.outOfLimitCount) > 0 ? '#ef4444' : 'inherit'}">${test.outOfLimitCount || '0.0'}%</strong></span>
+          </div>
         `;
-      }).join('')}
-      </tbody>
-    `;
+
+        const t = document.getElementById('detailsTable');
+        t.innerHTML = `
+          <thead>
+            <tr>
+              <th>Sample</th>
+              <th>Pos</th>
+              <th>Weight (g)</th>
+              <th>Source</th>
+              <th>Count (Ne)</th>
+              <th>Strength (lbs)</th>
+              <th>CSP</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${(test.rows || []).map(r => `
+              <tr>
+                <td><strong>${r.sample}</strong></td>
+                <td>${r.pos || '-'}</td>
+                <td>${r.weight || '-'}</td>
+                <td>${r.source || 'Manual'}</td>
+                <td><strong>${r.count || '-'}</strong></td>
+                <td>${r.strength || '-'}</td>
+                <td>${r.csp || '-'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        `;
+
+        // Render Charts for Count & Strength
+        destroyChartMap(detailsChartInstances, 'detailsChartsGrid');
+        const grid = document.getElementById('detailsChartsGrid');
+        grid.innerHTML = '';
+
+        if (test.rawData) {
+          const countChartId = 'details_count_dist';
+          const strengthChartId = 'details_strength_dist';
+          grid.appendChild(makeChartCard('Count Distribution', countChartId));
+          grid.appendChild(makeChartCard('Strength Distribution', strengthChartId));
+
+          const counts = test.rawData.counts || [];
+          const strengths = test.rawData.strengths || [];
+          const avgCount = parseFloat(test.avgCount);
+          const avgStrength = parseFloat(test.avgStrength);
+          const rangeVal = test.rangePercent || 2.5;
+          const lcl = parseFloat(test.lcl);
+          const ucl = parseFloat(test.ucl);
+
+          // Count Distribution
+          plotDistribution(countChartId, counts, avgCount, lcl, ucl, 'Count Distribution', detailsChartInstances, parseFloat(test.yarnCount));
+
+          // Strength Distribution
+          const sLims = limitsFromMean(avgStrength, 10.0);
+          plotDistribution(strengthChartId, strengths, avgStrength, sLims.lcl, sLims.ucl, 'Strength Distribution', detailsChartInstances, null);
+        } else {
+          grid.innerHTML = '<div style="padding:20px; color:#64748b;">No chart data saved for this report.</div>';
+        }
+
+      } else {
+        // --- Sliver / Carding Details (Legacy Support) ---
+        document.getElementById('detailsMeta').innerHTML =
+          `Date/Time: <strong>${escapeHtml(test.dateTime || '-')}</strong> | Test Date: <strong>${escapeHtml(test.testDate || '-')}</strong> | Operator: <strong>${escapeHtml(test.operatorName || '-')}</strong><br>` +
+          `Targets: <strong>${escapeHtml(formatTargets(test.targets))}</strong>`;
+
+        const groups = groupData(test.cardRows || []);
+        const productsPresent = (test.productsPresent && test.productsPresent.length)
+          ? test.productsPresent
+          : Object.keys(groups);
+
+        const savedRanges = test.acceptableRanges || (test.acceptableRange !== undefined && test.acceptableRange !== null
+          ? Object.fromEntries(productsPresent.map(p => [p, test.acceptableRange]))
+          : Object.fromEntries(productsPresent.map(p => [p, 5.0])));
+
+        renderGroupedCharts(groups, productsPresent.filter(p => groups[p] && groups[p].allValues.length > 0), 'detailsChartsGrid', detailsChartInstances, test.targets || {}, savedRanges);
+
+        const t = document.getElementById('detailsTable');
+        const targets = test.targets || {};
+        t.innerHTML = `
+          <thead>
+            <tr>
+              <th>Card #</th>
+              <th>Product</th>
+              <th>Target (g/m)</th>
+              <th>Coiler 1</th>
+              <th>Coiler 2</th>
+              <th>Coiler 3</th>
+              <th>Coiler 4</th>
+              <th>Avg</th>
+              <th>Min</th>
+              <th>Max</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${(test.cardRows || []).map(r => {
+          const targetValue = (r.product && targets[r.product] !== null && targets[r.product] > 0)
+            ? targets[r.product].toFixed(2)
+            : '-';
+          const coilers = (r.coilers || []).filter(v => v !== null && isFinite(v)).map(v => Number(v));
+          const coilerMin = coilers.length > 0 ? Math.min(...coilers).toFixed(3) : '-';
+          const coilerMax = coilers.length > 0 ? Math.max(...coilers).toFixed(3) : '-';
+          return `
+                <tr>
+                  <td><strong>${r.cardNo}</strong></td>
+                  <td>${escapeHtml(r.product || '')}</td>
+                  <td style="font-weight: 600; color: #2c3e50;">${targetValue}</td>
+                  ${(r.coilers || []).map(v => `<td>${v !== null && isFinite(v) ? Number(v).toFixed(3) : '-'}</td>`).join('')}
+                  <td><strong>${r.avg !== null && isFinite(r.avg) ? Number(r.avg).toFixed(3) : '-'}</strong></td>
+                  <td>${coilerMin}</td>
+                  <td>${coilerMax}</td>
+                </tr>
+              `;
+        }).join('')}
+          </tbody>
+        `;
+      }
     }
 
     function closeDetails() {
