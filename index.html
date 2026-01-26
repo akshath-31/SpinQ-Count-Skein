@@ -1498,7 +1498,7 @@
       <div style="font-weight:800; font-size:11px; flex-shrink:0;">SPINWISELY</div>
       <div
         style="font-weight:900; font-size:14px; flex:1; text-align:center; padding:0 4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
-        id="printTitle">Card Sliver Weight Monitoring</div>
+        id="printTitle">SpinQ Report Monitoring</div>
       <div id="printDate"
         style="color:#555; font-size:9px; flex-shrink:0; text-align:right; max-width:100px; overflow:hidden; text-overflow:ellipsis;">
       </div>
@@ -4539,7 +4539,7 @@
       const printChartsContainer = document.getElementById('printChartsContainer');
       const printTablesContainer = document.getElementById('printTablesContainer');
 
-      document.getElementById('printTitle').textContent = `Card Sliver Weight Monitoring — ${modeLabel}`;
+      document.getElementById('printTitle').textContent = `SpinQ Report Monitoring — ${modeLabel}`;
 
       // Handle "Custom Product" selection - replace __CUSTOM_PRODUCT__ with actual custom product names
       if (selectedProducts.includes('__CUSTOM_PRODUCT__')) {
@@ -5330,7 +5330,7 @@
       const printChartsContainer = document.getElementById('printChartsContainer');
       const printTablesContainer = document.getElementById('printTablesContainer');
 
-      document.getElementById('printTitle').textContent = `Card Sliver Weight Monitoring — ${modeLabel}`;
+      document.getElementById('printTitle').textContent = `SpinQ Report Monitoring — ${modeLabel}`;
 
       // Combine by product across tests for printing
       const combinedGroups = {};
@@ -5751,7 +5751,7 @@
 
         // Generate filename
         const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-        const filename = `Card_Sliver_Weight_Export_${timestamp}.xlsx`;
+        const filename = `SpinQ_Export_${timestamp}.xlsx`;
 
         // Write file
         XLSX.writeFile(wb, filename);
@@ -5825,7 +5825,7 @@
         // Title
         doc.setFontSize(16);
         doc.setFont('helvetica', 'bold');
-        doc.text('Card Sliver Weight Monitoring - Export', margin, yPos);
+        doc.text('SpinQ Report Monitoring - Export', margin, yPos);
         yPos += 10;
 
         // Export info
@@ -5963,7 +5963,7 @@
 
         // Generate filename
         const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-        const filename = `Card_Sliver_Weight_Export_${timestamp}.pdf`;
+        const filename = `SpinQ_Export_${timestamp}.pdf`;
 
         // Save PDF
         doc.save(filename);
