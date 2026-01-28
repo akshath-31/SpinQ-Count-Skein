@@ -2423,18 +2423,68 @@
           });
         });
 
-        // Metrics (Safely)
+        // Metrics - use currentTest object which has the correct values
+        // Don't parse DOM because metric positions change based on test type
+        const testType = getSelectedTestType();
+        const testTypeLabel = testType === 'count' ? 'Count Only' :
+          testType === 'strength' ? 'Strength Only' :
+            'Count & Strength';
+
         let metrics = {};
-        try {
+        if (typeof currentTest !== 'undefined' && currentTest) {
+          // Use values from currentTest which were calculated correctly
+          // Note: currentTest.countCV is already a number string like "3.05", not "3.05%"
+          metrics = {
+            avgCount: currentTest.avgCount || '-',
+            avgStrength: currentTest.avgStrength || '-',
+            avgCSP: currentTest.avgCSP || '-',
+            countCV: currentTest.countCV ? currentTest.countCV + '%' : '-'
+          };
+        } else {
+          // Fallback - should not happen if calculation was successful
+          console.warn("currentTest not available, using DOM parsing");
           const metricsDiv = document.getElementById('metrics');
           const mValues = metricsDiv ? metricsDiv.querySelectorAll('.value') : [];
-          metrics = {
-            avgCount: mValues[0]?.textContent || '-',
-            avgStrength: mValues[1]?.textContent || '-',
-            avgCSP: mValues[2]?.textContent || '-',
-            countCV: mValues[3]?.textContent || '-'
-          };
-        } catch (e) { console.warn("Metrics error", e); }
+
+          if (testType === 'count') {
+            metrics = {
+              avgCount: mValues[0]?.textContent || '-',
+              avgStrength: '-',
+              avgCSP: '-',
+              countCV: mValues[1]?.textContent || '-'
+            };
+          } else if (testType === 'strength') {
+            metrics = {
+              avgCount: '-',
+              avgStrength: mValues[0]?.textContent || '-',
+              avgCSP: '-',
+              countCV: '-'
+            };
+          } else {
+            // Both
+            metrics = {
+              avgCount: mValues[0]?.textContent || '-',
+              avgStrength: mValues[1]?.textContent || '-',
+              avgCSP: mValues[2]?.textContent || '-',
+              countCV: mValues[3]?.textContent || '-'
+            };
+          }
+        }
+
+        // Get outOfLimitCount - also test-type dependent
+        let outOfLimitValue = '0.0';
+        if (typeof currentTest !== 'undefined' && currentTest) {
+          outOfLimitValue = currentTest.outOfLimitPercent || '0.0';
+        } else {
+          // Fallback DOM parsing
+          const metricsDiv = document.getElementById('metrics');
+          const mValues = metricsDiv ? metricsDiv.querySelectorAll('.value') : [];
+          if (testType === 'count') {
+            outOfLimitValue = mValues[2]?.textContent?.replace('%', '') || '0.0';
+          } else if (testType === 'both') {
+            outOfLimitValue = mValues[4]?.textContent?.replace('%', '') || '0.0';
+          }
+        }
 
         const testRecord = {
           id: Date.now().toString(),
@@ -2454,8 +2504,9 @@
           avgStrength: metrics.avgStrength || '-',
           avgCSP: metrics.avgCSP || '-',
           countCV: metrics.countCV || '-',
-          outOfLimitCount: document.getElementById('metrics')?.querySelectorAll('.value')[4]?.textContent?.replace('%', '') || '0.0',
-          testType: 'Count & Strength',
+          outOfLimitCount: outOfLimitValue,
+          testType: testTypeLabel,
+          selectedTestMode: testType, // Store raw mode for future reference
           rawData: (typeof currentTest !== 'undefined' && currentTest.rawData) ? JSON.parse(JSON.stringify(currentTest.rawData)) : null,
           rangePercent: (typeof currentTest !== 'undefined') ? currentTest.rangePercent : 2.5,
           lcl: (typeof currentTest !== 'undefined') ? currentTest.lcl : null,
