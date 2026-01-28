@@ -1972,19 +1972,15 @@
 
       if (isDataModified || !isDataCalculated) {
         console.log("Auto-calculating before print since data changed...");
-        calculateResults();
+        calculateResults(false); // Show alerts when printing
       }
       // Proceed with print - pass mode to control which charts to show
       printCurrent(mode);
     }
 
     const triggerAutoCalc = debounce(() => {
-      // Only auto-calc if we have enough data? 
-      // calculateResults handles empty data gracefully (alerts or logs).
-      // Since this is auto-calc, we should suppress alerts?
-      // calculateResults has an alert on error.
-      // I will let it run. If it errors often, user will know format is wrong.
-      calculateResults();
+      // Auto-calc should be silent - don't show alerts while user is typing
+      calculateResults(true); // silent = true
     }, 800);
 
     function debounce(func, wait) {
@@ -1996,15 +1992,18 @@
       };
     }
 
-    function calculateResults() {
+    function calculateResults(silent = false) {
       try {
         const rows = document.querySelectorAll('#testTableBody tr');
         let countSum = 0, strengthSum = 0, cspSum = 0;
-        let n = 0;
+        let countOnlySum = 0; // For rows with only count (no strength)
+        let n = 0; // Rows with both count and strength
+        let nCountOnly = 0; // Rows with only count
         let counts = [], strengths = [], csps = [];
+        let countsOnly = []; // Just count values (for count-only mode)
 
         rows.forEach(row => {
-          // Get count from text content (calculated)
+          // Get count from text content (calculated from weight)
           const cText = row.querySelector('.count-val').textContent;
           const c = (cText !== '-' && cText !== '') ? parseFloat(cText) : null;
 
@@ -2014,25 +2013,57 @@
           const cspText = row.querySelector('.csp-val').textContent;
           const csp = (cspText !== '-' && cspText !== '') ? parseFloat(cspText) : null;
 
+          // If we have both count and strength, use them together
           if (c !== null && s !== null && isFinite(s) && csp !== null) {
             countSum += c; counts.push(c);
             strengthSum += s; strengths.push(s);
             cspSum += csp; csps.push(csp);
             n++;
           }
+          // If we only have count (no strength), track separately
+          else if (c !== null && isFinite(c)) {
+            countOnlySum += c;
+            countsOnly.push(c);
+            nCountOnly++;
+          }
         });
 
-        if (n === 0) return alert("No valid manual data entered.");
+        // Determine test mode: if we have any strength data, it's "both", otherwise "count only"
+        const hasStrength = (n > 0);
+        const hasCountOnly = (nCountOnly > 0);
 
-        const avgCount = (countSum / n).toFixed(2);
-        const avgStrength = (strengthSum / n).toFixed(2);
-        const avgCSP = (cspSum / n).toFixed(0);
+        // Need at least some data
+        if (n === 0 && nCountOnly === 0) {
+          if (!silent) alert("No valid data entered. Please enter Weight values.");
+          return;
+        }
 
-        // Calculate CV% for Count
-        let countCV = "0.00";
-        if (n > 1) {
+        let avgCount, avgStrength, avgCSP, countCV;
+        let dataForCountCalc = []; // Which count data to use for CV calculations
+        let totalCountSamples = 0;
+
+        if (hasStrength) {
+          // Both mode - use the combined data
+          avgCount = (countSum / n).toFixed(2);
+          avgStrength = (strengthSum / n).toFixed(2);
+          avgCSP = (cspSum / n).toFixed(0);
+          dataForCountCalc = counts;
+          totalCountSamples = n;
+        } else {
+          // Count-only mode - use count-only data
+          avgCount = (countOnlySum / nCountOnly).toFixed(2);
+          avgStrength = '-';
+          avgCSP = '-';
+          dataForCountCalc = countsOnly;
+          totalCountSamples = nCountOnly;
+        }
+
+
+        // Calculate CV% for Count using the appropriate dataset
+        countCV = "0.00";
+        if (totalCountSamples > 1 && dataForCountCalc.length > 0) {
           const mean = parseFloat(avgCount);
-          const variance = counts.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / (n - 1);
+          const variance = dataForCountCalc.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / (totalCountSamples - 1);
           const stdDev = Math.sqrt(variance);
           if (mean > 0) {
             countCV = ((stdDev / mean) * 100).toFixed(2);
@@ -2086,7 +2117,7 @@
             outOfLimitCount++;
           }
         });
-        const outOfLimitPercent = n > 0 ? ((outOfLimitCount / n) * 100).toFixed(1) : '0.0';
+        const outOfLimitPercent = totalCountSamples > 0 ? ((outOfLimitCount / totalCountSamples) * 100).toFixed(1) : '0.0';
         const isOutOfLimitNonZero = parseFloat(outOfLimitPercent) > 0;
         const outOfLimitStyle = isOutOfLimitNonZero ?
           'background-color: #ef4444 !important;' : '';
@@ -2141,19 +2172,23 @@
           }
         });
 
-        plotDistribution(countChartId, counts, countMean, lcl, ucl, 'Count Distribution', chartInstances, countTarget);
+        plotDistribution(countChartId, dataForCountCalc, countMean, lcl, ucl, 'Count Distribution', chartInstances, countTarget);
 
-        // 2. Strength Chart
-        const strengthChartId = 'chart_strength_dist';
-        chartsContainer.appendChild(makeChartCard('Strength Distribution (lbs)', strengthChartId));
-        const strengthMean = parseFloat(avgStrength);
-        // No explicit target for strength in inputs, so use Mean +/- 10% (wider range for strength usually)
-        const strengthLims = limitsFromMean(strengthMean, 10.0);
-        plotDistribution(strengthChartId, strengths, strengthMean, strengthLims.lcl, strengthLims.ucl, 'Strength Distribution', chartInstances, null);
+        // 2. Strength Chart - only render if we have strength data
+        if (hasStrength) {
+          const strengthChartId = 'chart_strength_dist';
+          chartsContainer.appendChild(makeChartCard('Strength Distribution (lbs)', strengthChartId));
+          const strengthMean = parseFloat(avgStrength);
+          // No explicit target for strength in inputs, so use Mean +/- 10% (wider range for strength usually)
+          const strengthLims = limitsFromMean(strengthMean, 10.0);
+          plotDistribution(strengthChartId, strengths, strengthMean, strengthLims.lcl, strengthLims.ucl, 'Strength Distribution', chartInstances, null);
+        }
 
         // -----------------------------
         // POPULATE currentTest FOR SAVING
         // -----------------------------
+        const testTypeLabel = hasStrength ? 'Count & Strength' : 'Count Only';
+
         currentTest = {
           reportNumber: document.getElementById('reportNumber')?.value || '',
           operatorName: document.getElementById('operatorName')?.value || '',
@@ -2171,11 +2206,11 @@
           rangePercent: rangeVal,
           lcl: lcl.toFixed(2),
           ucl: ucl.toFixed(2),
-          sampleCount: n,
+          sampleCount: totalCountSamples,
           outOfLimitPercent: outOfLimitPercent,
           outOfLimitCount: outOfLimitCount,
-          testType: 'Count & Strength',
-          rawData: { counts, strengths, csps: csps }
+          testType: testTypeLabel,
+          rawData: hasStrength ? { counts, strengths, csps } : { counts: countsOnly, strengths: [], csps: [] }
         };
 
         console.log("✓ currentTest populated:", currentTest);
