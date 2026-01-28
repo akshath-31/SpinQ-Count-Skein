@@ -1234,6 +1234,27 @@
 
     <div style="margin-top: 20px;">
       <h3>Test Parameters</h3>
+
+      <!-- Test Type Selection -->
+      <div
+        style="background: #f8f9fa; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; border: 2px solid #e1e8ed;">
+        <div style="font-weight: 600; font-size: 14px; color: #2c3e50; margin-bottom: 8px;">Test Type</div>
+        <div style="display: flex; gap: 24px; flex-wrap: wrap;">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
+            <input type="radio" name="testType" value="both" checked onchange="handleTestTypeChange()">
+            <span style="color: #2c3e50;">Both (Count & Strength)</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
+            <input type="radio" name="testType" value="count" onchange="handleTestTypeChange()">
+            <span style="color: #2c3e50;">Count Only</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
+            <input type="radio" name="testType" value="strength" onchange="handleTestTypeChange()">
+            <span style="color: #2c3e50;">Strength Only</span>
+          </label>
+        </div>
+      </div>
+
       <div class="header-inputs-row">
         <div class="input-card">
           <label class="form-label">Machine</label>
@@ -1830,6 +1851,85 @@
       fill('selCount', counts);
     }
 
+    // Get the currently selected test type
+    function getSelectedTestType() {
+      const selected = document.querySelector('input[name="testType"]:checked');
+      return selected ? selected.value : 'both';
+    }
+
+    // Handle test type change - show/hide columns accordingly
+    function handleTestTypeChange() {
+      const testType = getSelectedTestType();
+      const table = document.getElementById('sliverTable');
+
+      if (!table) return;
+
+      // Get all header cells and data rows
+      const headerRow = table.querySelector('thead tr');
+      const dataRows = table.querySelectorAll('tbody tr');
+
+      // Column indices (0-based)
+      const WEIGHT_COL = 2;
+      const COUNT_COL = 4;
+      const STRENGTH_COL = 5;
+      const CSP_COL = 6;
+
+      if (testType === 'count') {
+        // Count Only - hide Strength and CSP columns
+        hideColumn(headerRow, dataRows, STRENGTH_COL);
+        hideColumn(headerRow, dataRows, CSP_COL);
+        showColumn(headerRow, dataRows, WEIGHT_COL);
+        showColumn(headerRow, dataRows, COUNT_COL);
+      } else if (testType === 'strength') {
+        // Strength Only - hide Weight, Count, and CSP columns
+        hideColumn(headerRow, dataRows, WEIGHT_COL);
+        hideColumn(headerRow, dataRows, COUNT_COL);
+        hideColumn(headerRow, dataRows, CSP_COL);
+        showColumn(headerRow, dataRows, STRENGTH_COL);
+      } else {
+        // Both - show all columns
+        showColumn(headerRow, dataRows, WEIGHT_COL);
+        showColumn(headerRow, dataRows, COUNT_COL);
+        showColumn(headerRow, dataRows, STRENGTH_COL);
+        showColumn(headerRow, dataRows, CSP_COL);
+      }
+
+      // Update section title
+      const sectionTitle = document.querySelector('#testSection h2');
+      if (sectionTitle) {
+        if (testType === 'count') {
+          sectionTitle.textContent = 'Data Entry (Count Only)';
+        } else if (testType === 'strength') {
+          sectionTitle.textContent = 'Data Entry (Strength Only)';
+        } else {
+          sectionTitle.textContent = 'Data Entry (Count & Strength)';
+        }
+      }
+    }
+
+    function hideColumn(headerRow, dataRows, colIndex) {
+      if (headerRow && headerRow.cells[colIndex]) {
+        headerRow.cells[colIndex].style.display = 'none';
+      }
+      dataRows.forEach(row => {
+        if (row.cells[colIndex]) {
+          row.cells[colIndex].style.display = 'none';
+        }
+      });
+    }
+
+    function showColumn(headerRow, dataRows, colIndex) {
+      if (headerRow && headerRow.cells[colIndex]) {
+        headerRow.cells[colIndex].style.display = '';
+      }
+      dataRows.forEach(row => {
+        if (row.cells[colIndex]) {
+          row.cells[colIndex].style.display = '';
+        }
+      });
+    }
+
+
     // Override validateAndStart
     function validateAndStart() {
       const report = document.getElementById('reportNumber').value;
@@ -1857,6 +1957,9 @@
 
       // Initialize table
       resetTable(totalSamples, subsamples);
+
+      // Apply test type column visibility
+      handleTestTypeChange();
 
       // Scroll to test section
       document.getElementById('testSection').scrollIntoView({ behavior: 'smooth' });
@@ -1972,19 +2075,15 @@
 
       if (isDataModified || !isDataCalculated) {
         console.log("Auto-calculating before print since data changed...");
-        calculateResults();
+        calculateResults(false); // Show alerts when printing
       }
       // Proceed with print - pass mode to control which charts to show
       printCurrent(mode);
     }
 
     const triggerAutoCalc = debounce(() => {
-      // Only auto-calc if we have enough data? 
-      // calculateResults handles empty data gracefully (alerts or logs).
-      // Since this is auto-calc, we should suppress alerts?
-      // calculateResults has an alert on error.
-      // I will let it run. If it errors often, user will know format is wrong.
-      calculateResults();
+      // Auto-calc should be silent - don't show alerts while user is typing
+      calculateResults(true); // silent = true
     }, 800);
 
     function debounce(func, wait) {
@@ -1996,15 +2095,16 @@
       };
     }
 
-    function calculateResults() {
+    function calculateResults(silent = false) {
       try {
+        const testType = getSelectedTestType();
         const rows = document.querySelectorAll('#testTableBody tr');
         let countSum = 0, strengthSum = 0, cspSum = 0;
         let n = 0;
         let counts = [], strengths = [], csps = [];
 
         rows.forEach(row => {
-          // Get count from text content (calculated)
+          // Get count from text content (calculated from weight)
           const cText = row.querySelector('.count-val').textContent;
           const c = (cText !== '-' && cText !== '') ? parseFloat(cText) : null;
 
@@ -2014,23 +2114,59 @@
           const cspText = row.querySelector('.csp-val').textContent;
           const csp = (cspText !== '-' && cspText !== '') ? parseFloat(cspText) : null;
 
-          if (c !== null && s !== null && isFinite(s) && csp !== null) {
-            countSum += c; counts.push(c);
-            strengthSum += s; strengths.push(s);
-            cspSum += csp; csps.push(csp);
-            n++;
+          // Validation based on test type
+          let isValid = false;
+
+          if (testType === 'count') {
+            // Count only - just need valid count (from weight)
+            isValid = (c !== null && isFinite(c));
+            if (isValid) {
+              countSum += c;
+              counts.push(c);
+              n++;
+            }
+          } else if (testType === 'strength') {
+            // Strength only - just need valid strength
+            isValid = (s !== null && isFinite(s));
+            if (isValid) {
+              strengthSum += s;
+              strengths.push(s);
+              n++;
+            }
+          } else {
+            // Both - need count, strength, and CSP
+            isValid = (c !== null && s !== null && isFinite(s) && csp !== null);
+            if (isValid) {
+              countSum += c; counts.push(c);
+              strengthSum += s; strengths.push(s);
+              cspSum += csp; csps.push(csp);
+              n++;
+            }
           }
         });
 
-        if (n === 0) return alert("No valid manual data entered.");
+        // Only show alert if not in silent mode (manual calculation)
+        if (n === 0) {
+          if (!silent) {
+            const msg = testType === 'count' ?
+              'No valid count data entered. Please enter Weight values.' :
+              testType === 'strength' ?
+                'No valid strength data entered. Please enter Strength values.' :
+                'No valid manual data entered.';
+            alert(msg);
+          }
+          return;
+        }
 
-        const avgCount = (countSum / n).toFixed(2);
-        const avgStrength = (strengthSum / n).toFixed(2);
-        const avgCSP = (cspSum / n).toFixed(0);
 
-        // Calculate CV% for Count
+        // Calculate averages based on test type
+        const avgCount = (testType !== 'strength' && n > 0) ? (countSum / n).toFixed(2) : '-';
+        const avgStrength = (testType !== 'count' && n > 0) ? (strengthSum / n).toFixed(2) : '-';
+        const avgCSP = (testType === 'both' && n > 0) ? (cspSum / n).toFixed(0) : '-';
+
+        // Calculate CV% for Count (only if testing count)
         let countCV = "0.00";
-        if (n > 1) {
+        if (testType !== 'strength' && n > 1 && counts.length > 0) {
           const mean = parseFloat(avgCount);
           const variance = counts.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / (n - 1);
           const stdDev = Math.sqrt(variance);
@@ -2039,71 +2175,94 @@
           }
         }
 
-        // Calculate limits FIRST (before metrics display) to determine if Avg Count is out of range
-        const rangeInput = document.getElementById('txtRange');
-        const rangeVal = (rangeInput && rangeInput.value) ? parseFloat(rangeInput.value) : 2.5;
-        const selCountEl = document.getElementById('selCount');
-        const selCountVal = selCountEl ? selCountEl.value : '';
-        const valMatch = selCountVal.match(/[\d.]+/);
-        const selCount = valMatch ? parseFloat(valMatch[0]) : NaN;
-        const countTarget = (isFinite(selCount) && selCount > 0) ? selCount : null;
+        // Calculate limits FIRST (before metrics display) - only for count tests
+        let lcl = null, ucl = null, outOfLimitCount = 0, outOfLimitPercent = '0.0';
+        let isCountOutOfRange = false, isCVOutOfRange = false, isOutOfLimitNonZero = false;
 
-        console.log(`Debug Calc: Range=${rangeVal}, SelCountVal="${selCountVal}", Parsed=${selCount}, Target=${countTarget}`);
+        if (testType !== 'strength') {
+          const rangeInput = document.getElementById('txtRange');
+          const rangeVal = (rangeInput && rangeInput.value) ? parseFloat(rangeInput.value) : 2.5;
+          const selCountEl = document.getElementById('selCount');
+          const selCountVal = selCountEl ? selCountEl.value : '';
+          const valMatch = selCountVal.match(/[\d.]+/);
+          const selCount = valMatch ? parseFloat(valMatch[0]) : NaN;
+          const countTarget = (isFinite(selCount) && selCount > 0) ? selCount : null;
 
-        // Calculate Limits based on Target (spec) or Mean (control)
-        let lcl, ucl;
-        if (countTarget) {
-          lcl = countTarget * (1 - rangeVal / 100);
-          ucl = countTarget * (1 + rangeVal / 100);
-        } else {
-          // Fallback to Mean if no target (CONTROL limits logic)
-          const countMean = parseFloat(avgCount);
-          lcl = countMean * (1 - rangeVal / 100);
-          ucl = countMean * (1 + rangeVal / 100);
+          console.log(`Debug Calc: Range=${rangeVal}, SelCountVal="${selCountVal}", Parsed=${selCount}, Target=${countTarget}`);
+
+          // Calculate Limits based on Target (spec) or Mean (control)
+          if (countTarget) {
+            lcl = countTarget * (1 - rangeVal / 100);
+            ucl = countTarget * (1 + rangeVal / 100);
+          } else {
+            // Fallback to Mean if no target (CONTROL limits logic)
+            const countMean = parseFloat(avgCount);
+            lcl = countMean * (1 - rangeVal / 100);
+            ucl = countMean * (1 + rangeVal / 100);
+          }
+
+          // Check if Avg Count is out of range for metric box coloring
+          const avgCountNum = parseFloat(avgCount);
+          isCountOutOfRange = (avgCountNum < lcl || avgCountNum > ucl);
+
+          // Check if CV% is out of acceptable range (> 1.5%)
+          const cvNum = parseFloat(countCV);
+          isCVOutOfRange = cvNum > 1.5;
+
+          // Get table rows first (needed for out-of-limit calculation)
+          const tableRows = document.querySelectorAll('#testTableBody tr');
+
+          // Calculate % of readings outside limits
+          tableRows.forEach(row => {
+            const countCell = row.querySelector('.count-val');
+            const cVal = parseFloat(countCell.textContent);
+            if (isFinite(cVal) && (cVal < lcl || cVal > ucl)) {
+              outOfLimitCount++;
+            }
+          });
+          outOfLimitPercent = n > 0 ? ((outOfLimitCount / n) * 100).toFixed(1) : '0.0';
+          isOutOfLimitNonZero = parseFloat(outOfLimitPercent) > 0;
         }
 
-        // Check if Avg Count is out of range for metric box coloring
-        const avgCountNum = parseFloat(avgCount);
-        const isCountOutOfRange = (avgCountNum < lcl || avgCountNum > ucl);
-        const countMetricStyle = isCountOutOfRange ?
-          'background-color: #ef4444 !important;' : '';
+        const countMetricStyle = isCountOutOfRange ? 'background-color: #ef4444 !important;' : '';
+        const cvMetricStyle = isCVOutOfRange ? 'background-color: #ef4444 !important;' : '';
+        const outOfLimitStyle = isOutOfLimitNonZero ? 'background-color: #ef4444 !important;' : '';
 
-        // Check if CV% is out of acceptable range (> 1.5%)
-        const cvNum = parseFloat(countCV);
-        const isCVOutOfRange = cvNum > 1.5;
-        const cvMetricStyle = isCVOutOfRange ?
-          'background-color: #ef4444 !important;' : '';
-
-        // Get table rows first (needed for out-of-limit calculation)
-        const tableRows = document.querySelectorAll('#testTableBody tr');
-
-        // Calculate % of readings outside limits
-        let outOfLimitCount = 0;
-        tableRows.forEach(row => {
-          const countCell = row.querySelector('.count-val');
-          const cVal = parseFloat(countCell.textContent);
-          if (isFinite(cVal) && (cVal < lcl || cVal > ucl)) {
-            outOfLimitCount++;
-          }
-        });
-        const outOfLimitPercent = n > 0 ? ((outOfLimitCount / n) * 100).toFixed(1) : '0.0';
-        const isOutOfLimitNonZero = parseFloat(outOfLimitPercent) > 0;
-        const outOfLimitStyle = isOutOfLimitNonZero ?
-          'background-color: #ef4444 !important;' : '';
-
-        // Update metrics display with conditional red styling
+        // Update metrics display with conditional metrics based on test type
         const metricsDiv = document.getElementById('metrics');
-        metricsDiv.innerHTML = `
-             <div class="metric" style="${countMetricStyle}"><div class="label">Avg Count</div><div class="value">${avgCount}</div></div>
-             <div class="metric"><div class="label">Avg Strength</div><div class="value">${avgStrength}</div></div>
-             <div class="metric"><div class="label">Avg CSP</div><div class="value">${avgCSP}</div></div>
-             <div class="metric" style="${cvMetricStyle}"><div class="label">Count CV%</div><div class="value">${countCV}%</div></div>
-             <div class="metric" style="${outOfLimitStyle}"><div class="label">Out of Limit</div><div class="value">${outOfLimitPercent}%</div></div>
+        let metricsHTML = '';
+
+        if (testType === 'count') {
+          // Count only - show count metrics
+          metricsHTML = `
+            <div class="metric" style="${countMetricStyle}"><div class="label">Avg Count</div><div class="value">${avgCount}</div></div>
+            <div class="metric" style="${cvMetricStyle}"><div class="label">Count CV%</div><div class="value">${countCV}%</div></div>
+            <div class="metric" style="${outOfLimitStyle}"><div class="label">Out of Limit</div><div class="value">${outOfLimitPercent}%</div></div>
           `;
+        } else if (testType === 'strength') {
+          // Strength only - show strength metrics
+          metricsHTML = `
+            <div class="metric"><div class="label">Avg Strength</div><div class="value">${avgStrength}</div></div>
+            <div class="metric"><div class="label">Sample Count</div><div class="value">${n}</div></div>
+          `;
+        } else {
+          // Both - show all metrics
+          metricsHTML = `
+            <div class="metric" style="${countMetricStyle}"><div class="label">Avg Count</div><div class="value">${avgCount}</div></div>
+            <div class="metric"><div class="label">Avg Strength</div><div class="value">${avgStrength}</div></div>
+            <div class="metric"><div class="label">Avg CSP</div><div class="value">${avgCSP}</div></div>
+            <div class="metric" style="${cvMetricStyle}"><div class="label">Count CV%</div><div class="value">${countCV}%</div></div>
+            <div class="metric" style="${outOfLimitStyle}"><div class="label">Out of Limit</div><div class="value">${outOfLimitPercent}%</div></div>
+          `;
+        }
+
+        metricsDiv.innerHTML = metricsHTML;
         metricsDiv.style.display = 'flex';
+
 
         isDataCalculated = true;
         document.getElementById('saveBtn').disabled = false;
+
 
         // -----------------------------
         // Render Charts
@@ -2112,48 +2271,64 @@
         const chartsContainer = document.getElementById('chartsGrid');
         chartsContainer.style.display = 'grid'; // Ensure it's visible
 
-        // 1. Count Chart (with User Defined Range) - limits already calculated above
-        const countChartId = 'chart_count_dist';
-        chartsContainer.appendChild(makeChartCard(`Count Distribution (Ne) - Limits +/-${rangeVal}%`, countChartId));
-        const countMean = parseFloat(avgCount);
-        // lcl/ucl already calculated above - no need to recalculate
+        // Render charts based on test type
+        if (testType !== 'strength') {
+          // Count Chart (with User Defined Range) - only for count/both tests
+          const rangeVal = parseFloat(document.getElementById('txtRange')?.value) || 2.5;
+          const countChartId = 'chart_count_dist';
+          chartsContainer.appendChild(makeChartCard(`Count Distribution (Ne) - Limits +/-${rangeVal}%`, countChartId));
+          const countMean = parseFloat(avgCount);
+          const selCountEl = document.getElementById('selCount');
+          const selCountVal = selCountEl ? selCountEl.value : '';
+          const valMatch = selCountVal.match(/[\d.]+/);
+          const selCount = valMatch ? parseFloat(valMatch[0]) : NaN;
+          const countTarget = (isFinite(selCount) && selCount > 0) ? selCount : null;
 
-        // Update Status Column (tableRows already defined above)
-        tableRows.forEach(row => {
-          const countCell = row.querySelector('.count-val');
-          const statusCell = row.querySelector('.status-cell');
-          const cVal = parseFloat(countCell.textContent);
+          // Update Status Column for count tests
+          const tableRows = document.querySelectorAll('#testTableBody tr');
+          tableRows.forEach(row => {
+            const countCell = row.querySelector('.count-val');
+            const statusCell = row.querySelector('.status-cell');
+            const cVal = parseFloat(countCell.textContent);
 
-          if (isFinite(cVal)) {
-            if (cVal < lcl || cVal > ucl) {
-              statusCell.textContent = 'OOC';
-              statusCell.style.color = '#ef4444';
-              statusCell.style.fontWeight = 'bold';
-              row.style.backgroundColor = '#fef2f2'; // Light red bg
+            if (isFinite(cVal) && lcl !== null && ucl !== null) {
+              if (cVal < lcl || cVal > ucl) {
+                statusCell.textContent = 'OOC';
+                statusCell.style.color = '#ef4444';
+                statusCell.style.fontWeight = 'bold';
+                row.style.backgroundColor = '#fef2f2'; // Light red bg
+              } else {
+                statusCell.textContent = 'OK';
+                statusCell.style.color = '#10b981';
+                statusCell.style.fontWeight = 'normal';
+                row.style.backgroundColor = '';
+              }
             } else {
-              statusCell.textContent = 'OK';
-              statusCell.style.color = '#10b981';
-              statusCell.style.fontWeight = 'normal';
-              row.style.backgroundColor = '';
+              statusCell.textContent = '-';
             }
-          } else {
-            statusCell.textContent = '-';
-          }
-        });
+          });
 
-        plotDistribution(countChartId, counts, countMean, lcl, ucl, 'Count Distribution', chartInstances, countTarget);
+          plotDistribution(countChartId, counts, countMean, lcl, ucl, 'Count Distribution', chartInstances, countTarget);
+        }
 
-        // 2. Strength Chart
-        const strengthChartId = 'chart_strength_dist';
-        chartsContainer.appendChild(makeChartCard('Strength Distribution (lbs)', strengthChartId));
-        const strengthMean = parseFloat(avgStrength);
-        // No explicit target for strength in inputs, so use Mean +/- 10% (wider range for strength usually)
-        const strengthLims = limitsFromMean(strengthMean, 10.0);
-        plotDistribution(strengthChartId, strengths, strengthMean, strengthLims.lcl, strengthLims.ucl, 'Strength Distribution', chartInstances, null);
+        if (testType !== 'count') {
+          // Strength Chart - only for strength/both tests
+          const strengthChartId = 'chart_strength_dist';
+          chartsContainer.appendChild(makeChartCard('Strength Distribution (lbs)', strengthChartId));
+          const strengthMean = parseFloat(avgStrength);
+          // No explicit target for strength in inputs, so use Mean +/- 10% (wider range for strength usually)
+          const strengthLims = limitsFromMean(strengthMean, 10.0);
+          plotDistribution(strengthChartId, strengths, strengthMean, strengthLims.lcl, strengthLims.ucl, 'Strength Distribution', chartInstances, null);
+        }
+
 
         // -----------------------------
         // POPULATE currentTest FOR SAVING
         // -----------------------------
+        const testTypeLabel = testType === 'count' ? 'Count Only' :
+          testType === 'strength' ? 'Strength Only' :
+            'Count & Strength';
+
         currentTest = {
           reportNumber: document.getElementById('reportNumber')?.value || '',
           operatorName: document.getElementById('operatorName')?.value || '',
@@ -2168,17 +2343,19 @@
           avgStrength: avgStrength,
           avgCSP: avgCSP,
           countCV: countCV,
-          rangePercent: rangeVal,
-          lcl: lcl.toFixed(2),
-          ucl: ucl.toFixed(2),
+          rangePercent: testType !== 'strength' ? (parseFloat(document.getElementById('txtRange')?.value) || 2.5) : null,
+          lcl: (lcl !== null) ? lcl.toFixed(2) : null,
+          ucl: (ucl !== null) ? ucl.toFixed(2) : null,
           sampleCount: n,
           outOfLimitPercent: outOfLimitPercent,
           outOfLimitCount: outOfLimitCount,
-          testType: 'Count & Strength',
+          testType: testTypeLabel,
+          selectedTestMode: testType, // Store the raw mode (count/strength/both)
           rawData: { counts, strengths, csps: csps }
         };
 
         console.log("✓ currentTest populated:", currentTest);
+
 
       } catch (e) {
         console.error(e);
@@ -3013,7 +3190,7 @@
         calcRow(row.querySelector('.weight-val'));
       });
 
-      calculateResults();
+      calculateResults(true); // Silent - simulated data
     }
 
 
